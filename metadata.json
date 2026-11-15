@@ -1,0 +1,8 @@
+{
+  "name": "Emdash",
+  "description": "Describe what you want to build and preview, iterate, and export working web applications in seconds.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

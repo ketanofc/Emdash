@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Emdash – what do you want to build?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#fff;--fg:#09090b;--card:#fafafa;--muted:#f4f4f5;--mfg:#71717a;--bd:#e4e4e7;--pri:#18181b;--prif:#fafafa;--ring:#a1a1aa;--glow:rgba(0,0,0,.05);--r:10px;
+--f:'Inter',system-ui,-apple-system,sans-serif;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#000;--fg:#fafafa;--card:#0a0a0a;--muted:#18181b;--mfg:#a1a1aa;--bd:#262626;--pri:#fafafa;--prif:#09090b;--ring:#525252;--glow:rgba(120,140,255,.14)}}
+:root[data-theme="dark"]{--bg:#000;--fg:#fafafa;--card:#0a0a0a;--muted:#18181b;--mfg:#a1a1aa;--bd:#262626;--pri:#fafafa;--prif:#09090b;--ring:#525252;--glow:rgba(120,140,255,.14)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--fg);font:14px/1.5 var(--f);-webkit-font-smoothing:antialiased}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+:focus-visible{outline:0;box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--ring)}
+.app{height:100%;display:flex;flex-direction:column}
+nav{height:56px;display:flex;align-items:center;gap:6px;padding:0 16px;flex:none}
+.logo{display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px;letter-spacing:-.02em;margin-right:12px;background:none;border:0;padding:0}
+.mark{width:24px;height:24px;border-radius:7px;background:var(--pri);color:var(--prif);display:grid;place-items:center;font-weight:600;line-height:1;padding-bottom:2px}
+.sp{flex:1}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:34px;padding:0 12px;border-radius:8px;border:1px solid var(--bd);background:transparent;font-weight:500;font-size:13px;transition:background .15s}
+.btn:hover{background:var(--muted)}
+.btn.p{background:var(--pri);color:var(--prif);border-color:var(--pri)}
+.btn.p:hover{opacity:.9;background:var(--pri)}
+.btn.g{border-color:transparent;color:var(--mfg)}
+.btn.g:hover{color:var(--fg)}
+.btn.ic{width:34px;padding:0}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--bd);border-radius:99px;height:28px;padding:0 12px;font-size:12px;font-weight:500;color:var(--mfg);background:transparent}
+.prog{width:48px;height:3px;background:var(--muted);border-radius:9px;overflow:hidden}
+.prog b{display:block;height:100%;width:100%;background:var(--fg);transition:width .3s}
+.adtag{font-size:10px;font-weight:600;border:1px solid var(--bd);border-radius:5px;padding:0 6px;color:var(--mfg);background:var(--bg);line-height:18px}
+/* home */
+#home{flex:1;overflow:auto;position:relative}
+#home:before{content:"";position:absolute;inset:0 0 auto 0;height:520px;background:radial-gradient(60% 100% at 50% 0,var(--glow),transparent 70%);pointer-events:none}
+#home.off{display:none}
+.wrap{position:relative;max-width:720px;margin:0 auto;padding:clamp(40px,12vh,110px) 16px 24px;text-align:center}
+h1{font-size:clamp(32px,6vw,52px);line-height:1.05;letter-spacing:-.04em;font-weight:600;margin:0 0 24px}
+.comp{background:var(--card);border:1px solid var(--bd);border-radius:18px;padding:12px;text-align:left;transition:box-shadow .15s,border-color .15s}
+.comp:focus-within{border-color:var(--ring)}
+.comp textarea{width:100%;border:0;background:transparent;resize:none;min-height:68px;outline:0;font-size:15px;padding:4px}
+.comp textarea::placeholder,.cin textarea::placeholder{color:var(--mfg)}
+.crow{display:flex;align-items:center;gap:6px}
+.send{width:32px;height:32px;border-radius:50%;border:0;background:var(--pri);color:var(--prif);display:grid;place-items:center}
+.send:disabled{opacity:.3;cursor:default}
+.chips{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:18px 0 0}
+.chips .btn{border-radius:99px;height:30px;color:var(--mfg)}
+.chips .btn:hover{color:var(--fg)}
+.gal{max-width:980px;margin:0 auto;padding:24px 16px 48px;position:relative}
+.gal h2{font-size:15px;font-weight:600;margin:0 0 4px;letter-spacing:-.01em}
+.gal p.s{margin:0 0 16px;color:var(--mfg)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
+.tile{text-align:left;background:transparent;border:0;padding:0}
+.thumb{aspect-ratio:16/10;border:1px solid var(--bd);border-radius:12px;background:var(--card);padding:14px;display:flex;flex-direction:column;gap:6px;overflow:hidden;transition:border-color .15s,transform .15s}
+.tile:hover .thumb{border-color:var(--ring);transform:translateY(-2px)}
+.thumb i{display:block;height:6px;border-radius:4px;background:var(--bd)}
+.thumb i.a{width:46%;height:9px;background:var(--mfg);opacity:.7}
+.thumb i.b{width:72%}.thumb i.c{width:58%}
+.thumb u{display:block;flex:1;border-radius:6px;background:linear-gradient(135deg,hsl(var(--h) 70% 60%/.35),hsl(var(--h) 70% 60%/.08));margin-top:2px}
+.tile b{display:block;font-weight:500;margin-top:8px}
+.tile span{color:var(--mfg);font-size:12px}
+.sponsor .thumb{background:var(--muted);border-style:dashed;justify-content:center;align-items:flex-start}
+/* workspace */
+#ws{flex:1;display:none;min-height:0}
+#ws.on{display:grid;grid-template-columns:minmax(300px,380px) 1fr}
+.chat{display:flex;flex-direction:column;min-height:0;border-top:1px solid var(--bd);border-right:1px solid var(--bd)}
+.msgs{flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:14px}
+.u{align-self:flex-end;max-width:88%;background:var(--muted);padding:8px 12px;border-radius:14px 14px 4px 14px}
+.a{display:flex;flex-direction:column;gap:8px}
+.think{font-size:12px;color:var(--mfg);display:flex;align-items:center;gap:6px}
+.think .d{width:6px;height:6px;border-radius:50%;background:var(--mfg);animation:p 1s infinite}
+.think.done .d{animation:none;background:#22c55e}
+@keyframes p{50%{opacity:.25}}
+.file{display:flex;align-items:center;gap:8px;border:1px solid var(--bd);border-radius:8px;padding:6px 10px;font-size:12px;background:var(--card)}
+.file em{font-style:normal;color:var(--mfg);margin-left:auto}
+.adc{display:flex;align-items:center;gap:10px;border:1px dashed var(--bd);border-radius:10px;padding:8px 10px;background:var(--muted);font-size:12px}
+.adc small{display:block;color:var(--mfg)}
+.cin{padding:12px;display:flex;flex-direction:column;gap:8px}
+.cbox{border:1px solid var(--bd);border-radius:14px;background:var(--card);padding:8px;display:flex;gap:6px;align-items:flex-end}
+.cbox:focus-within{border-color:var(--ring)}
+.cbox textarea{flex:1;min-width:0;border:0;background:transparent;resize:none;outline:0;min-height:36px;max-height:120px;padding:6px 4px}
+.pane{display:flex;flex-direction:column;min-width:0;min-height:0;border-top:1px solid var(--bd)}
+.bar{display:flex;align-items:center;gap:6px;padding:8px 12px;border-bottom:1px solid var(--bd);flex-wrap:wrap}
+.seg{display:inline-flex;background:var(--muted);padding:3px;border-radius:9px}
+.seg button{border:0;background:transparent;height:26px;min-width:28px;padding:0 10px;border-radius:6px;font-size:13px;font-weight:500;color:var(--mfg);display:inline-flex;align-items:center;justify-content:center}
+.seg button[aria-selected=true]{background:var(--bg);color:var(--fg);box-shadow:0 0 0 1px var(--bd)}
+select{height:30px;border:1px solid var(--bd);background:var(--bg);border-radius:8px;padding:0 8px;font-size:13px}
+.url{flex:1;min-width:120px;height:30px;border:1px solid var(--bd);border-radius:8px;padding:0 10px;display:flex;align-items:center;font-size:12px;color:var(--mfg);white-space:nowrap;overflow:hidden}
+.view{flex:1;min-height:0;background:var(--muted);display:flex;justify-content:center;padding:0;overflow:auto}
+.frame{width:100%;height:100%;background:#fff;transition:width .25s;max-width:100%}
+.frame.tab{width:768px;border-inline:1px solid var(--bd)}
+.frame.mob{width:390px;border-inline:1px solid var(--bd)}
+iframe{width:100%;height:100%;border:0;background:#fff;display:block}
+pre{margin:0;padding:16px;width:100%;height:100%;overflow:auto;font:12px/1.6 ui-monospace,Menlo,monospace;background:var(--card)}
+.empty{width:100%;height:100%;display:grid;place-items:center;color:var(--mfg);text-align:center;padding:20px}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;place-items:center;padding:16px;z-index:20}
+.ov.on{display:grid}
+.dlg{background:var(--bg);border:1px solid var(--bd);border-radius:14px;padding:22px;max-width:400px;width:100%;display:flex;flex-direction:column;gap:14px}
+.dlg h2{margin:0;font-size:17px;font-weight:600;letter-spacing:-.01em}.dlg p{margin:0;color:var(--mfg)}
+.dlg .r{display:flex;gap:8px;justify-content:flex-end}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);border-radius:99px;padding:8px 16px;display:none;z-index:30;font-weight:500}
+@media(max-width:800px){#ws.on{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) minmax(0,1fr)}.chat{border-right:0}.hd{display:none}.nav-l{display:none}.url{display:none}}
+::selection{background:var(--fg);color:var(--bg)}
+*{scrollbar-width:thin;scrollbar-color:var(--bd) transparent}
+.btn,.send{transition:background .15s,transform .1s,opacity .15s}
+.btn:active,.send:active{transform:scale(.97)}
+#home:after{content:"";position:absolute;inset:0 0 auto 0;height:520px;background-image:radial-gradient(var(--bd) 1px,transparent 1px);background-size:22px 22px;-webkit-mask-image:radial-gradient(60% 100% at 50% 0,#000,transparent 75%);mask-image:radial-gradient(60% 100% at 50% 0,#000,transparent 75%);opacity:.7;pointer-events:none}
+.ann{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--bd);background:var(--card);border-radius:99px;padding:4px 12px 4px 4px;font-size:12px;color:var(--mfg);margin-bottom:20px}
+.ann b{background:var(--pri);color:var(--prif);border-radius:99px;padding:0 9px;font-weight:600;font-size:11px;line-height:20px}
+.comp{box-shadow:0 1px 2px rgba(0,0,0,.04),0 12px 40px -16px rgba(0,0,0,.25)}
+.comp:focus-within{box-shadow:0 0 0 4px var(--glow),0 12px 40px -16px rgba(0,0,0,.3)}
+.rise{animation:rise .6s cubic-bezier(.2,.7,.2,1) both}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}}
+.skel{width:100%;height:100%;padding:36px 20px;display:flex;flex-direction:column;gap:12px;align-items:center;background:var(--card)}
+.skel i{display:block;border-radius:8px;background:linear-gradient(90deg,var(--muted),var(--bd),var(--muted));background-size:200% 100%;animation:sh 1.4s linear infinite}
+@keyframes sh{to{background-position:-200% 0}}
+.dlg{animation:pop .18s ease-out}
+@keyframes pop{from{opacity:0;transform:scale(.96)}}
+.pill.low{color:#d97706;border-color:#d97706}
+.av{width:20px;height:20px;border-radius:6px;background:var(--pri);color:var(--prif);display:inline-grid;place-items:center;font-size:12px;line-height:1;padding-bottom:2px;font-weight:600}
+.foot{text-align:center;color:var(--mfg);font-size:12px;padding:28px 0 0}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+<nav>
+  <button class="logo" id="logo" aria-label="Emdash home"><span class="mark">—</span>Emdash</button>
+  <button class="btn g nav-l">Templates</button><button class="btn g nav-l">Pricing</button>
+  <span class="sp"></span>
+  <button class="pill" id="quota" aria-label="Daily build time"><span id="qtxt">5h 00m left</span><span class="prog"><b id="qbar"></b></span></button>
+  <button class="btn p">Sign in</button>
+</nav>
+
+<section id="home">
+  <div class="wrap">
+    <div class="ann rise"><b>Free</b>5 hours a day, supported by ads</div>
+    <h1 class="rise" style="animation-delay:.05s">What do you want to build?</h1>
+    <div class="comp rise" style="animation-delay:.12s">
+      <textarea id="p0" placeholder="Ask Emdash to build a habit tracker with a weekly streak view…" aria-label="Describe your app"></textarea>
+      <div class="crow">
+        <button class="btn ic g" aria-label="Attach"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+        <button class="pill" style="height:30px">Emdash Free</button>
+        <span class="sp"></span>
+        <button class="send" id="go" aria-label="Build" disabled><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+      </div>
+    </div>
+    <div class="chips rise" style="animation-delay:.2s" id="chips">
+      <button class="btn">Todo app</button><button class="btn">Coffee landing page</button><button class="btn">Photo portfolio</button><button class="btn">Pricing page</button>
+    </div>
+  </div>
+  <div class="gal">
+    <h2>Start from a template</h2><p class="s">Pick one and make it yours. Free for 5 hours a day.</p>
+    <div class="grid" id="grid"></div>
+    <p class="foot">Build time resets every 24 hours. Ads keep Emdash free.</p>
+  </div>
+</section>
+
+<section id="ws">
+  <div class="chat">
+    <div class="msgs" id="msgs"></div>
+    <div class="cin">
+      <div class="adc"><span class="adtag">Ad</span><span>CloudNest hosting<small>3 months free</small></span></div>
+      <div class="cbox"><textarea id="p1" rows="1" placeholder="Ask for a change" aria-label="Ask for a change"></textarea><button class="send" id="send" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div>
+    </div>
+  </div>
+  <div class="pane">
+    <div class="bar">
+      <div class="seg" role="tablist"><button role="tab" aria-selected="true" data-t="prev">Preview</button><button role="tab" aria-selected="false" data-t="code">Code</button></div>
+      <div class="seg hd" id="dev" role="group" aria-label="Device">
+        <button aria-label="Desktop" aria-selected="true" data-d=""><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></button>
+        <button aria-label="Tablet" aria-selected="false" data-d="tab"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/></svg></button>
+        <button aria-label="Mobile" aria-selected="false" data-d="mob"><svg viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="18" rx="2"/></svg></button>
+      </div>
+      <select id="ver" aria-label="Version"></select>
+      <div class="url" id="url">untitled.emdash.site</div>
+      <button class="btn ic" id="rel" aria-label="Reload"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg></button>
+      <button class="btn" id="dl">Export</button>
+      <button class="btn p" id="pub">Publish</button>
+    </div>
+    <div class="view">
+      <div class="frame" id="frm" style="display:none"><iframe id="fr" title="App preview" sandbox="allow-scripts"></iframe></div>
+      <div class="empty" id="emp">Your app will appear here.</div>
+      <pre id="code" style="display:none"></pre>
+    </div>
+  </div>
+</section>
+</div>
+
+<div class="ov" id="adm"><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="admT">
+  <h2 id="admT">Add more build time</h2>
+  <p>Watch a short ad to add 20 minutes to today’s limit.</p>
+  <div class="adc"><span class="adtag">Ad</span><span>Rewarded video<small>15 seconds</small></span></div>
+  <div class="r"><button class="btn" id="close">Not now</button><button class="btn p" id="watch">Watch ad</button></div>
+</div></div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+var TOTAL=18000,used=0,busy=false,vers=[],title='',tab='prev';
+var $=function(i){return document.getElementById(i)};
+var SK='<div class="skel"><i style="width:40%;height:14px"></i><i style="width:70%;height:34px"></i><i style="width:55%;height:14px"></i><i style="width:120px;height:36px;margin-top:6px"></i><div style="display:flex;gap:12px;width:100%;max-width:520px;margin-top:24px"><i style="flex:1;height:90px"></i><i style="flex:1;height:90px"></i><i style="flex:1;height:90px"></i></div></div>';
+var EMPTY='<div style="display:grid;gap:6px;place-items:center"><span class="mark" style="width:32px;height:32px;font-size:16px;margin-bottom:6px">—</span><b style="color:var(--fg);font-weight:500">Nothing here yet</b><span>Describe an app and it will appear here.</span></div>';
+$('emp').innerHTML=EMPTY;
+var TPL=[['Todo app','Build a todo app with filters',200],['Coffee landing page','Build a landing page for a coffee roastery',28],['Photo portfolio','Build a portfolio for a photographer',280],['Pricing page','Build a pricing page for a SaaS',150],['Habit tracker','Build a habit tracker with weekly streaks',340]];
+var g=$('grid');
+TPL.forEach(function(t){var b=document.createElement('button');b.className='tile';b.innerHTML='<div class="thumb" style="--h:'+t[2]+'"><i class="a"></i><i class="b"></i><i class="c"></i><u></u></div><b></b><span>Free template</span>';b.querySelector('b').textContent=t[0];b.onclick=function(){$('p0').value=t[1];chk();$('p0').focus();window.scrollTo(0,0);$('home').scrollTop=0};g.appendChild(b)});
+var s=document.createElement('div');s.className='tile sponsor';s.innerHTML='<div class="thumb"><span class="adtag">Ad</span><b style="margin-top:6px">CloudNest hosting</b><span>3 months free. Ads keep Emdash free.</span></div><b>&nbsp;</b>';g.appendChild(s);
+
+function fmt(x){var r=Math.max(0,TOTAL-x);return Math.floor(r/3600)+'h '+String(Math.floor(r%3600/60)).padStart(2,'0')+'m left'}
+function quota(){$('qtxt').textContent=fmt(used);$('qbar').style.width=Math.max(0,100-used/TOTAL*100)+'%';$('quota').classList.toggle('low',TOTAL-used<1800)}
+function toast(t){var e=$('toast');e.textContent=t;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(function(){e.style.display='none'},2200)}
+function esc(x){return x.replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function slug(x){return(x.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,24)||'untitled')+'.emdash.site'}
+function chk(){$('go').disabled=!$('p0').value.trim()}
+
+var ACC={blue:'#2563eb',green:'#16a34a',purple:'#7c3aed',orange:'#ea580c',red:'#dc2626'};
+function opts(p,o){o=o||{};if(/dark/i.test(p))o.dark=true;if(/light/i.test(p))o.dark=false;for(var k in ACC)if(new RegExp(k,'i').test(p))o.acc=ACC[k];return o}
+function build(t,p,o){
+  var dk=o.dark,bg=dk?'#09090b':'#fff',fg=dk?'#fafafa':'#09090b',bd=dk?'#27272a':'#e4e4e7',mu=dk?'#a1a1aa':'#71717a',ac=o.acc||(dk?'#fafafa':'#18181b'),af=o.acc?'#fff':(dk?'#09090b':'#fafafa');
+  var css='*{box-sizing:border-box}body{margin:0;font:15px/1.5 system-ui,sans-serif;color:'+fg+';background:'+bg+'}';
+  if(/todo|task|habit/i.test(p))return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+t+'</title><style>'+css+'main{max-width:440px;margin:48px auto;padding:0 16px}h1{font-size:22px;letter-spacing:-.02em;margin:0 0 16px}form{display:flex;gap:8px}input[type=text]{flex:1;height:36px;padding:0 12px;border:1px solid '+bd+';border-radius:8px;background:transparent;color:inherit}button{height:36px;padding:0 14px;border:0;border-radius:8px;background:'+ac+';color:'+af+'}ul{padding:0;margin:16px 0}li{display:flex;gap:10px;padding:10px 12px;border:1px solid '+bd+';border-radius:8px;margin-top:8px;list-style:none}.d span{text-decoration:line-through;color:'+mu+'}</style></head><body><main><h1>'+t+'</h1><form id="f"><input type="text" id="i" placeholder="Add an item" required><button>Add</button></form><ul id="l"></ul></main><script>var l=document.getElementById("l");document.getElementById("f").onsubmit=function(e){e.preventDefault();var i=document.getElementById("i"),li=document.createElement("li");li.innerHTML="<input type=checkbox><span></span>";li.lastChild.textContent=i.value;li.firstChild.onchange=function(){li.className=this.checked?"d":""};l.appendChild(li);i.value=""}<\/script></body></html>';
+  return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+t+'</title><style>'+css+'header{padding:72px 20px 48px;text-align:center;max-width:620px;margin:0 auto}h1{font-size:38px;letter-spacing:-.03em;line-height:1.1;margin:0 0 12px}p{color:'+mu+';margin:0 0 20px}a{display:inline-block;height:36px;line-height:36px;padding:0 16px;background:'+ac+';color:'+af+';border-radius:8px;text-decoration:none}section{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;max-width:760px;margin:0 auto 48px;padding:0 16px}div{border:1px solid '+bd+';border-radius:10px;padding:16px}div p{margin:4px 0 0;font-size:14px}</style></head><body><header><h1>'+t+'</h1><p>One clear message, built from a single prompt.</p><a href="#">Get started</a></header><section><div><b>Fast</b><p>Loads in a blink.</p></div><div><b>Simple</b><p>One goal per page.</p></div><div><b>Yours</b><p>Export the code anytime.</p></div></section></body></html>';
+}
+
+function show(i){var v=vers[i];$('code').textContent=v.html;$('emp').style.display='none';$('frm').style.display='block';$('fr').srcdoc=v.html;view()}
+function view(){$('frm').style.display=tab==='prev'&&vers.length?'block':'none';$('code').style.display=tab==='code'?'block':'none';$('emp').style.display=vers.length||tab==='code'?'none':'grid'}
+function el(c,h){var d=document.createElement('div');d.className=c;if(h)d.innerHTML=h;$('msgs').appendChild(d);$('msgs').scrollTop=1e9;return d}
+
+function run(p){
+  p=p.trim();if(busy||!p)return;
+  if(TOTAL-used<=0){openAd();return}
+  busy=true;
+  $('home').classList.add('off');$('ws').classList.add('on');
+  var first=!vers.length;if(first){$('emp').innerHTML=SK;$('emp').style.display='block';$('frm').style.display='none'}
+  if(first){title=esc(p.replace(/^(build|make|create)\s+(me\s+)?(a|an)?\s*/i,'')).slice(0,60)||'My app';title=title.charAt(0).toUpperCase()+title.slice(1)}
+  var prev=first?{}:Object.assign({},vers[vers.length-1].o),o=opts(p,prev);
+  var u=el('u');u.textContent=p;
+  var a=el('a','<div class="think"><span class="av">—</span><span class="d"></span><span>Thinking…</span></div>');
+  var ad=el('adc','<span class="adtag">Ad</span><span>Building… ad shows while you wait<small>Sponsored</small></span>');
+  setTimeout(function(){
+    a.querySelector('.think').classList.add('done');a.querySelector('.think span:last-child').textContent='Thought for 3s';
+    ad.remove();
+    var txt=document.createElement('div');a.appendChild(txt);
+    var words=(first?'I’ve built your app with a clean, minimal layout. Ask for colors, dark mode, or new sections.':'Updated. I applied your change and saved it as a new version.').split(' '),i=0;
+    var t=setInterval(function(){txt.textContent+=(i?' ':'')+words[i++];$('msgs').scrollTop=1e9;if(i>=words.length){clearInterval(t);
+      var n=vers.length+1;vers.push({html:build(title,first?p:vers[0].p,o),o:o,p:first?p:vers[0].p});
+      var f=el('file','<svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5"/></svg>index.html<em>v'+n+'</em>');a.appendChild(f);
+      var op=document.createElement('option');op.value=n-1;op.textContent='Version '+n;$('ver').appendChild(op);$('ver').value=n-1;
+      $('url').textContent=slug(title);show(n-1);used+=360;quota();busy=false;if(TOTAL-used<=0)openAd()}},45);
+  },1500);
+}
+function openAd(){$('adm').classList.add('on');$('watch').focus()}
+
+$('p0').oninput=chk;
+$('go').onclick=function(){run($('p0').value)};
+$('p0').onkeydown=function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();run($('p0').value)}};
+$('chips').onclick=function(e){var b=e.target.closest('button');if(b){$('p0').value='Build a '+b.textContent.toLowerCase();chk();$('p0').focus()}};
+$('send').onclick=function(){var v=$('p1').value;$('p1').value='';run(v)};
+$('p1').onkeydown=function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('send').click()}};
+$('logo').onclick=function(){if(busy)return;vers=[];$('ver').innerHTML='';$('msgs').innerHTML='';$('ws').classList.remove('on');$('home').classList.remove('off');$('p0').value='';chk();$('frm').style.display='none';tab='prev';$('emp').innerHTML=EMPTY;view();$('url').textContent='untitled.emdash.site'};
+$('ver').onchange=function(){show(+this.value)};
+$('rel').onclick=function(){if(vers.length)$('fr').srcdoc=vers[+$('ver').value].html};
+document.querySelectorAll('[data-t]').forEach(function(b){b.onclick=function(){tab=b.dataset.t;document.querySelectorAll('[data-t]').forEach(function(x){x.setAttribute('aria-selected',x===b)});view()}});
+document.querySelectorAll('[data-d]').forEach(function(b){b.onclick=function(){$('frm').className='frame '+b.dataset.d;document.querySelectorAll('[data-d]').forEach(function(x){x.setAttribute('aria-selected',x===b)})}});
+$('dl').onclick=function(){toast(vers.length?'Export starts here in the real app':'Build something first')};
+$('pub').onclick=function(){toast(vers.length?'Published to '+$('url').textContent:'Build something first')};
+$('quota').onclick=openAd;
+$('close').onclick=function(){$('adm').classList.remove('on')};
+document.addEventListener('keydown',function(e){if(e.key==='Escape')$('adm').classList.remove('on')});
+$('watch').onclick=function(){var b=$('watch'),n=15;b.disabled=true;var t=setInterval(function(){b.textContent='Ad ends in '+(--n)+'s';if(n<=0){clearInterval(t);used=Math.max(0,used-1200);quota();b.disabled=false;b.textContent='Watch ad';$('adm').classList.remove('on');toast('Added 20 minutes')}},120)};
+quota();
+var PH=['a habit tracker with a weekly streak view','a landing page for a coffee roastery','a pricing page with a monthly and yearly toggle','a portfolio site for a photographer'],pi=0;
+setInterval(function(){if(!$('p0').value){pi=(pi+1)%PH.length;$('p0').placeholder='Ask Emdash to build '+PH[pi]+'…'}},3200);
+</script>
+</body>
+</html>

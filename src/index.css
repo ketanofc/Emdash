@@ -1,0 +1,180 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-edge: var(--edge);
+  --color-neutral: var(--neutral);
+  --color-surface: var(--surface);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+}
+
+:root {
+  --radius: 0px;
+  --background: #f6f6f6;
+  --foreground: #09090b;
+  --card: #ffffff;
+  --card-foreground: #09090b;
+  --surface: #fafafa;
+  --surface-foreground: #09090b;
+  --popover: #ffffff;
+  --popover-foreground: #09090b;
+  --primary: #ff5401;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #09090b;
+  --muted: #f4f4f5;
+  --muted-foreground: #4a4a4a;
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+  --destructive: #e40014;
+  --destructive-foreground: #ffffff;
+  --border: #c5c5c5;
+  --edge: color-mix(in oklab, var(--border) 64%, var(--background));
+  --neutral: #a3a3a3;
+  --input: #e4e4e7;
+  --ring: #9f9fa9;
+  --success: #00c758;
+  --info: #009cf5;
+}
+
+.dark {
+  --background: #121212;
+  --foreground: #fafafa;
+  --card: #18181b;
+  --card-foreground: #fafafa;
+  --surface: #18181b;
+  --surface-foreground: #fafafa;
+  --popover: #18181b;
+  --popover-foreground: #fafafa;
+  --primary: #ff5401;
+  --primary-foreground: #ffffff;
+  --secondary: #27272a;
+  --secondary-foreground: #fafafa;
+  --muted: #27272a;
+  --muted-foreground: #9f9fa9;
+  --accent: #27272a;
+  --accent-foreground: #fafafa;
+  --destructive: #bf000f;
+  --destructive-foreground: #fafafa;
+  --border: #27272a;
+  --edge: color-mix(in oklab, var(--border) 82%, var(--background));
+  --neutral: #71717a;
+  --input: rgba(255, 255, 255, 0.15);
+  --ring: #71717b;
+  --success: #00c758;
+  --info: #009cf5;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased selection:bg-primary selection:text-primary-foreground overflow-x-hidden;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+.border-edge {
+  border-color: var(--edge);
+}
+
+.bg-edge {
+  background-color: var(--edge);
+}
+
+.border-neutral {
+  border-color: var(--neutral);
+}
+
+.screen-line-before {
+  position: relative;
+}
+
+.screen-line-before::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100vw;
+  width: 200vw;
+  height: 1px;
+  background-color: var(--edge);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.screen-line-after {
+  position: relative;
+}
+
+.screen-line-after::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: -100vw;
+  width: 200vw;
+  height: 1px;
+  background-color: var(--edge);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.hatch-pattern {
+  background-image: repeating-linear-gradient(
+    315deg,
+    var(--edge) 0,
+    var(--edge) 1px,
+    transparent 0,
+    transparent 50%
+  );
+  background-size: 10px 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
