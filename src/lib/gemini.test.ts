@@ -161,4 +161,26 @@ describe("server-backed gemini client", () => {
     expect(result.summary).toBe("Built Demo.");
     expect(result.files["index.html"]).toBe("<html></html>");
   });
+
+  it("formats model display names with clear Gemini branding", async () => {
+    const { formatModelDisplayName } = await import("./gemini");
+    expect(formatModelDisplayName("gemini-3.5-flash")).toBe("Gemini 3.5 Flash");
+    expect(formatModelDisplayName("gemini-3.5-flash-lite")).toBe("Gemini 3.5 Flash Lite");
+    expect(formatModelDisplayName("gemini-4-hydrogen")).toBe("Gemini 4 Hydrogen");
+    expect(formatModelDisplayName("gemini-2.5-flash")).toBe("Gemini 2.5 Flash");
+    expect(formatModelDisplayName("gemini-4-argon")).toBe("Gemini 4 Argon");
+    expect(formatModelDisplayName("gemini-2.5-pro")).toBe("Gemini 2.5 Pro");
+  });
+
+  it("falls back to default Gemini models without throwing when /api/gemini/models returns 404 and no key is set", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response("Not Found", { status: 404 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const models = await listGeminiModels();
+    expect(models.length).toBeGreaterThan(0);
+    expect(models[0].displayName).toContain("Gemini");
+  });
 });
+

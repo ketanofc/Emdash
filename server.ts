@@ -126,7 +126,7 @@ function parseGeminiSdkError(err: unknown): {
       status: 429,
       code: "RATE_LIMIT",
       message:
-        "Gemini API rate limit reached (429). Wait a moment and try again, or check your API key in Settings > Models.",
+        "API rate limit reached (429). Wait a moment and try again, or check your API key in Settings > Models.",
     };
   }
 
@@ -144,7 +144,7 @@ function parseGeminiSdkError(err: unknown): {
       status: 403,
       code: "INVALID_KEY",
       message:
-        "Your Gemini API key was rejected (400/401/403). Please verify your API key above and click Test Key.",
+        "Your API key was rejected (400/401/403). Please verify your API key above and click Test Key.",
     };
   }
 
@@ -153,7 +153,7 @@ function parseGeminiSdkError(err: unknown): {
       status: 404,
       code: "GEMINI_404",
       message:
-        "The selected Gemini model was not found or is unsupported. Try switching models in Settings > Models.",
+        "The selected model was not found or is unsupported. Try switching models in Settings > Models.",
     };
   }
 
@@ -161,7 +161,7 @@ function parseGeminiSdkError(err: unknown): {
     return {
       status: 504,
       code: "TIMEOUT",
-      message: "Gemini request timed out after 60 seconds. Please try again.",
+      message: "Request timed out after 60 seconds. Please try again.",
     };
   }
 
@@ -296,68 +296,72 @@ async function serverGeminiGenerate(
   }
 }
 
-async function startServer() {
-  const app = express();
-  app.use(express.json({ limit: "20mb" }));
+export const app = express();
+app.use(express.json({ limit: "20mb" }));
 
-  app.get("/api/health", (_req, res) => {
-    res.json({ ok: true });
-  });
+app.get("/api/health", (_req, res) => {
+  res.json({ ok: true });
+});
 
-  app.get("/api/gemini/models", async (req, res) => {
-    const ai = getAiClient(req);
-    if (!ai) {
-      res.status(503).json({
-        code: "MISSING_KEY",
-        error:
-          "Gemini API key is not configured. Open Settings > Models to connect your API key.",
+app.get("/api/gemini/models", async (req, res) => {
+  const ai = getAiClient(req);
+  if (!ai) {
+    res.status(503).json({
+      code: "MISSING_KEY",
+      error:
+        "API key is not configured. Open Settings > Models to connect your API key.",
+    });
+    return;
+  }
+
+  const defaultModels: GeminiModelOption[] = [
+    { id: "gemini-3.5-flash", displayName: "Gemini 3.5 Flash" },
+    { id: "gemini-3.5-flash-lite", displayName: "Gemini 3.5 Flash Lite" },
+    { id: "gemini-4-hydrogen", displayName: "Gemini 4 Hydrogen" },
+    { id: "gemini-2.5-flash", displayName: "Gemini 2.5 Flash" },
+    { id: "gemini-4-argon", displayName: "Gemini 4 Argon" },
+  ];
+
+  try {
+    const pager = await withTimeout(
+      ai.models.list({ config: { pageSize: 100 } }),
+      GEMINI_TIMEOUT_MS
+    );
+    const list: GeminiModelOption[] = [];
+    for await (const m of pager) {
+      if (!m.name) continue;
+      const id = m.name.trim().replace(/^models\//, "");
+      if (!id || DEPRECATED_MODEL_RE.test(id)) continue;
+      if (
+        Array.isArray(m.supportedActions) &&
+        m.supportedActions.length > 0 &&
+        !m.supportedActions.includes("generateContent")
+      ) {
+        continue;
+      }
+      const rawName = m.displayName?.trim() || id;
+      const displayName = rawName.toLowerCase().startsWith("gemini")
+        ? rawName.replace(/^gemini[\s-_]*/i, "Gemini ")
+        : `Gemini ${rawName}`;
+      list.push({
+        id,
+        displayName,
+        description: m.description,
       });
-      return;
+      if (list.length >= 100) break;
     }
 
-    const defaultModels: GeminiModelOption[] = [
-      { id: "gemini-3.5-flash-lite", displayName: "Gemini 3.5 Flash Lite" },
-      { id: "gemini-4-hydrogen", displayName: "Gemini 4 Hydrogen" },
-      { id: "gemini-2.5-flash", displayName: "Gemini 2.5 Flash" },
-      { id: "gemini-4-argon", displayName: "Gemini 4 Argon" },
-    ];
-
-    try {
-      const pager = await withTimeout(
-        ai.models.list({ config: { pageSize: 100 } }),
-        GEMINI_TIMEOUT_MS
-      );
-      const list: GeminiModelOption[] = [];
-      for await (const m of pager) {
-        if (!m.name) continue;
-        const id = m.name.trim().replace(/^models\//, "");
-        if (!id || DEPRECATED_MODEL_RE.test(id)) continue;
-        if (
-          Array.isArray(m.supportedActions) &&
-          m.supportedActions.length > 0 &&
-          !m.supportedActions.includes("generateContent")
-        ) {
-          continue;
-        }
-        list.push({
-          id,
-          displayName: m.displayName?.trim() || id,
-          description: m.description,
-        });
-        if (list.length >= 100) break;
+    const merged = list.length > 0 ? list : defaultModels;
+    for (const dm of defaultModels) {
+      if (!merged.some((m) => m.id === dm.id)) {
+        merged.push(dm);
       }
+    }
 
-      const merged = list.length > 0 ? list : defaultModels;
-      for (const dm of defaultModels) {
-        if (!merged.some((m) => m.id === dm.id)) {
-          merged.push(dm);
-        }
-      }
-
-      res.json({
-        models: merged,
-        defaultModel: pickDefaultFlashModel(merged),
-      });
+    res.json({
+      models: merged,
+      defaultModel: pickDefaultFlashModel(merged),
+    });
     } catch (err: unknown) {
       const parsed = parseGeminiSdkError(err);
       res.status(parsed.status).json({
@@ -373,7 +377,7 @@ async function startServer() {
       res.status(503).json({
         code: "MISSING_KEY",
         error:
-          "Gemini API key is not configured. Open Settings > Models to connect your API key.",
+          "API key is not configured. Open Settings > Models to connect your API key.",
       });
       return;
     }
@@ -419,7 +423,7 @@ async function startServer() {
       res.status(503).json({
         code: "MISSING_KEY",
         error:
-          "Gemini API key is not configured. Open Settings > Models to connect your API key.",
+          "API key is not configured. Open Settings > Models to connect your API key.",
       });
       return;
     }
@@ -528,6 +532,11 @@ async function startServer() {
     res.type("html").send(site.html);
   });
 
+async function startServer() {
+  if (process.env.VERCEL) {
+    return;
+  }
+
   if (!isProd) {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
@@ -550,7 +559,9 @@ async function startServer() {
   });
 }
 
-startServer().catch((err) => {
-  console.error("Failed to start server:", err);
-  process.exit(1);
-});
+if (!process.env.VERCEL) {
+  startServer().catch((err) => {
+    console.error("Failed to start server:", err);
+    process.exit(1);
+  });
+}

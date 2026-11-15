@@ -12,6 +12,16 @@ export const FALLBACK_GEMINI_MODEL = "gemini-3.5-flash-lite";
 const REQUEST_TIMEOUT_MS = 60_000;
 const PIPELINE_TIMEOUT_MS = 180_000;
 const DEFAULT_RATE_LIMIT_BACKOFF_MS = 1200;
+const DEPRECATED_MODEL_RE = /^gemini-(?:1\.|2\.0|pro\b)/i;
+const GEMINI_4_MODEL_RE = /^gemini-4-/i;
+
+export const DEFAULT_GEMINI_MODELS: GeminiModelOption[] = [
+  { id: "gemini-3.5-flash", displayName: "Gemini 3.5 Flash" },
+  { id: "gemini-3.5-flash-lite", displayName: "Gemini 3.5 Flash Lite" },
+  { id: "gemini-4-hydrogen", displayName: "Gemini 4 Hydrogen" },
+  { id: "gemini-2.5-flash", displayName: "Gemini 2.5 Flash" },
+  { id: "gemini-4-argon", displayName: "Gemini 4 Argon" },
+];
 
 export type GeminiErrorCode =
   | "RATE_LIMIT"
@@ -66,6 +76,33 @@ function sleep(ms: number): Promise<void> {
 function normalizeModelId(model: string): string {
   const clean = model.trim().replace(/^models\//, "");
   return clean || FALLBACK_GEMINI_MODEL;
+}
+
+function buildContents(prompt: string, attachments?: AttachedFile[]) {
+  const parts: Array<
+    { text: string } | { inlineData: { mimeType: string; data: string } }
+  > = [];
+
+  if (Array.isArray(attachments) && attachments.length > 0) {
+    for (const file of attachments.slice(0, 4)) {
+      if (!file || typeof file !== "object") continue;
+      if ((file.kind === "image" || file.kind === "inline") && file.base64Data) {
+        parts.push({
+          inlineData: {
+            mimeType: file.mimeType || "application/octet-stream",
+            data: file.base64Data,
+          },
+        });
+      } else if (file.kind === "text" && file.content) {
+        parts.push({
+          text: `Attached file (${file.name || "attachment"}):\n${file.content.slice(0, 12000)}`,
+        });
+      }
+    }
+  }
+
+  parts.push({ text: prompt });
+  return { parts };
 }
 
 async function fetchWithTimeout(
@@ -125,7 +162,7 @@ function mapStatusToError(
   if (status === 429 || detail.code === "RATE_LIMIT") {
     return new GeminiError(
       "RATE_LIMIT",
-      detail.message || "Gemini API rate limit reached (429). Please wait a moment and try again.",
+      detail.message || "API rate limit reached (429). Please wait a moment and try again.",
       429
     );
   }
@@ -133,7 +170,7 @@ function mapStatusToError(
     return new GeminiError(
       "MISSING_KEY",
       detail.message ||
-        "Gemini API key is not configured. Open Settings > Models to connect your API key.",
+        "API key is not configured. Open Settings > Models to connect your API key.",
       status
     );
   }
@@ -141,7 +178,7 @@ function mapStatusToError(
     return new GeminiError(
       "INVALID_KEY",
       detail.message ||
-        "Your Gemini API key was rejected (400/401/403). Please verify your API key above and click Test Key.",
+        "Your API key was rejected (400/401/403). Please verify your API key above and click Test Key.",
       status
     );
   }
@@ -154,9 +191,36 @@ function mapStatusToError(
 
 const NON_GENERAL_FLASH_RE = /(?:tts|audio|image|live|robotics|computer-use)/i;
 
+export function formatModelDisplayName(modelId: string, displayName?: string): string {
+  const clean = modelId.trim().replace(/^models\//, "");
+  if (/^gemini-3\.5-flash-lite$/i.test(clean)) return "Gemini 3.5 Flash Lite";
+  if (/^gemini-3\.5-flash$/i.test(clean)) return "Gemini 3.5 Flash";
+  if (/^gemini-4-hydrogen$/i.test(clean)) return "Gemini 4 Hydrogen";
+  if (/^gemini-2\.5-flash$/i.test(clean)) return "Gemini 2.5 Flash";
+  if (/^gemini-4-argon$/i.test(clean)) return "Gemini 4 Argon";
+  if (/^gemini-2\.5-pro$/i.test(clean)) return "Gemini 2.5 Pro";
+
+  if (displayName && displayName.trim() && displayName !== modelId) {
+    const trimmed = displayName.trim();
+    if (/^gemini\b/i.test(trimmed)) {
+      return trimmed.replace(/^gemini[\s-_]*/i, "Gemini ");
+    }
+    return `Gemini ${trimmed}`;
+  }
+
+  const formatted = clean
+    .replace(/^gemini[\s-_]*/i, "")
+    .split(/[-_]+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+
+  return formatted ? `Gemini ${formatted}` : clean;
+}
+
 export function pickDefaultFlashModel(models: GeminiModelOption[]): string {
   const general = models.filter((m) => !NON_GENERAL_FLASH_RE.test(m.id));
   const preferredExact =
+    general.find((m) => /^gemini-3\.5-flash$/i.test(m.id)) ??
     general.find((m) => /^gemini-3\.5-flash-lite$/i.test(m.id)) ??
     general.find((m) => /^gemini-4-hydrogen$/i.test(m.id)) ??
     general.find((m) => /^gemini-2\.5-flash$/i.test(m.id));
@@ -178,18 +242,208 @@ export function pickDefaultFlashModel(models: GeminiModelOption[]): string {
   return generalFlash?.id ?? anyFlash?.id ?? models[0]?.id ?? FALLBACK_GEMINI_MODEL;
 }
 
+export async function fetchDirectGeminiModels(apiKey: string): Promise<GeminiModelOption[]> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      if (res.status === 400 || res.status === 401 || res.status === 403) {
+        throw new GeminiError(
+          "INVALID_KEY",
+          "Your API key was rejected (400/401/403). Please verify your API key above and click Test Key.",
+          res.status
+        );
+      }
+      if (res.status === 429) {
+        throw new GeminiError(
+          "RATE_LIMIT",
+          "API rate limit reached (429). Please wait a moment and try again.",
+          429
+        );
+      }
+      throw new GeminiError(
+        `GEMINI_${res.status}`,
+        `Google API request failed with status ${res.status}.`,
+        res.status
+      );
+    }
+
+    const data = (await res.json()) as {
+      models?: Array<{
+        name?: string;
+        displayName?: string;
+        description?: string;
+        supportedGenerationMethods?: string[];
+      }>;
+    };
+
+    const rawList = Array.isArray(data.models) ? data.models : [];
+    const list: GeminiModelOption[] = [];
+    for (const m of rawList) {
+      if (!m.name) continue;
+      const id = m.name.replace(/^models\//, "");
+      if (!id || DEPRECATED_MODEL_RE.test(id)) continue;
+      if (
+        Array.isArray(m.supportedGenerationMethods) &&
+        m.supportedGenerationMethods.length > 0 &&
+        !m.supportedGenerationMethods.includes("generateContent")
+      ) {
+        continue;
+      }
+      list.push({
+        id,
+        displayName: formatModelDisplayName(id, m.displayName),
+        description: m.description,
+      });
+      if (list.length >= 100) break;
+    }
+
+    const merged = list.length > 0 ? list : DEFAULT_GEMINI_MODELS;
+    for (const dm of DEFAULT_GEMINI_MODELS) {
+      if (!merged.some((m) => m.id === dm.id)) {
+        merged.push(dm);
+      }
+    }
+    return merged;
+  } catch (err: unknown) {
+    if (err instanceof GeminiError) throw err;
+    if (/AIza[0-9A-Za-z-_]{35}/.test(apiKey)) {
+      return DEFAULT_GEMINI_MODELS;
+    }
+    throw new GeminiError(
+      "INVALID_KEY",
+      "Your API key was rejected (400/401/403). Please verify your API key above and click Test Key.",
+      403
+    );
+  }
+}
+
+export async function directGeminiGenerate(
+  apiKey: string,
+  options: GeminiRequestOptions
+): Promise<string> {
+  const cleanModel = normalizeModelId(options.model);
+  const contents = buildContents(options.prompt, options.attachments);
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+  const contentsPayload = [
+    {
+      role: "user",
+      parts: contents.parts.map((p) => {
+        if ("inlineData" in p) {
+          return {
+            inlineData: {
+              mimeType: p.inlineData.mimeType,
+              data: p.inlineData.data,
+            },
+          };
+        }
+        return { text: p.text };
+      }),
+    },
+  ];
+
+  const bodyObj: Record<string, unknown> = {
+    contents: contentsPayload,
+  };
+
+  if (options.system && options.system.trim()) {
+    bodyObj.systemInstruction = {
+      parts: [{ text: options.system }],
+    };
+  }
+
+  const generationConfig: Record<string, unknown> = {};
+  if (
+    typeof options.temperature === "number" &&
+    !GEMINI_4_MODEL_RE.test(cleanModel)
+  ) {
+    generationConfig.temperature = options.temperature;
+  }
+  if (options.schema) {
+    generationConfig.responseMimeType = "application/json";
+    generationConfig.responseSchema = options.schema;
+  }
+  if (Object.keys(generationConfig).length > 0) {
+    bodyObj.generationConfig = generationConfig;
+  }
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(bodyObj),
+  });
+
+  if (!res.ok) {
+    if (res.status === 400 || res.status === 401 || res.status === 403) {
+      throw new GeminiError(
+        "INVALID_KEY",
+        "Your API key was rejected (400/401/403). Please verify your API key above and click Test Key.",
+        res.status
+      );
+    }
+    if (res.status === 429) {
+      throw new GeminiError(
+        "RATE_LIMIT",
+        "API rate limit reached (429). Please wait a moment and try again.",
+        429
+      );
+    }
+    throw new GeminiError(
+      `GEMINI_${res.status}`,
+      `Gemini request failed with status ${res.status}.`,
+      res.status
+    );
+  }
+
+  const data = (await res.json()) as {
+    candidates?: Array<{
+      content?: {
+        parts?: Array<{ text?: string }>;
+      };
+    }>;
+  };
+
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+  if (!text) {
+    throw new GeminiError(
+      "MALFORMED",
+      "Received an empty response from Gemini."
+    );
+  }
+  return text;
+}
+
 export async function listGeminiModels(explicitKey?: string): Promise<GeminiModelOption[]> {
   const headers: Record<string, string> = {};
   if (explicitKey && explicitKey.trim()) {
     headers["x-goog-api-key"] = explicitKey.trim();
   }
 
-  const res = await fetchWithTimeout("/api/gemini/models", {
-    method: "GET",
-    headers,
-  });
+  let res: Response;
+  try {
+    res = await fetchWithTimeout("/api/gemini/models", {
+      method: "GET",
+      headers,
+    });
+  } catch (err: unknown) {
+    const keyToTest = (explicitKey && explicitKey.trim()) || (await loadEncryptedApiKey());
+    if (keyToTest) {
+      return await fetchDirectGeminiModels(keyToTest);
+    }
+    throw err;
+  }
 
   if (!res.ok) {
+    if (res.status === 404) {
+      const keyToTest = (explicitKey && explicitKey.trim()) || (await loadEncryptedApiKey());
+      if (keyToTest) {
+        return await fetchDirectGeminiModels(keyToTest);
+      }
+      return DEFAULT_GEMINI_MODELS;
+    }
     const detail = await extractServerError(res);
     throw mapStatusToError(res.status, detail);
   }
@@ -239,6 +493,19 @@ export async function gemini({
   }
 
   if (!res.ok) {
+    if (res.status === 404) {
+      const savedKey = await loadEncryptedApiKey();
+      if (savedKey) {
+        return await directGeminiGenerate(savedKey, {
+          model,
+          system,
+          prompt,
+          schema,
+          temperature,
+          attachments,
+        });
+      }
+    }
     const detail = await extractServerError(res);
     throw mapStatusToError(res.status, detail);
   }
@@ -258,27 +525,71 @@ export async function runPipelineViaServer(
   options: PipelineStreamOptions,
   onStage?: (stage: PipelineStage) => void
 ): Promise<PipelineStreamResult> {
-  const res = await fetchWithTimeout(
-    "/api/gemini/pipeline",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "text/event-stream",
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(
+      "/api/gemini/pipeline",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
+        body: JSON.stringify({
+          prompt: userPrompt,
+          model: normalizeModelId(options.model),
+          brief: options.brief,
+          files: options.files,
+          runtimeErrors: options.runtimeErrors,
+          attachments: options.attachments,
+        }),
       },
-      body: JSON.stringify({
-        prompt: userPrompt,
-        model: normalizeModelId(options.model),
-        brief: options.brief,
-        files: options.files,
-        runtimeErrors: options.runtimeErrors,
-        attachments: options.attachments,
-      }),
-    },
-    PIPELINE_TIMEOUT_MS
-  );
+      PIPELINE_TIMEOUT_MS
+    );
+  } catch (err: unknown) {
+    const savedKey = await loadEncryptedApiKey();
+    if (savedKey) {
+      const { runPipeline } = await import("./pipeline.ts");
+      return await runPipeline(
+        userPrompt,
+        {
+          model: normalizeModelId(options.model),
+          brief: options.brief,
+          files: options.files,
+          runtimeErrors: options.runtimeErrors,
+          attachments: options.attachments,
+          generateFn: (opts) => directGeminiGenerate(savedKey, opts),
+        },
+        onStage
+      );
+    }
+    throw err;
+  }
 
   if (!res.ok) {
+    if (res.status === 404) {
+      const savedKey = await loadEncryptedApiKey();
+      if (!savedKey) {
+        throw new GeminiError(
+          "MISSING_KEY",
+          "API key is not configured. Open Settings > Models to connect your API key.",
+          503
+        );
+      }
+      const { runPipeline } = await import("./pipeline.ts");
+      return await runPipeline(
+        userPrompt,
+        {
+          model: normalizeModelId(options.model),
+          brief: options.brief,
+          files: options.files,
+          runtimeErrors: options.runtimeErrors,
+          attachments: options.attachments,
+          generateFn: (opts) => directGeminiGenerate(savedKey, opts),
+        },
+        onStage
+      );
+    }
     const detail = await extractServerError(res);
     throw mapStatusToError(res.status, detail);
   }

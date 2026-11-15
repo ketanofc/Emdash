@@ -43,6 +43,7 @@ import {
   formatFileSize,
   processUploadedFile,
 } from "@/src/lib/fileAttachment";
+import { formatModelDisplayName } from "@/src/lib/gemini";
 import { buildStaticPreviewHtml } from "@/src/lib/pipeline";
 import type {
   AppVersion,
@@ -398,7 +399,7 @@ export function WorkspaceView({
                 className="inline-flex items-center gap-1.5 h-7 px-2 border border-edge bg-background font-mono text-[11px] text-foreground hover:border-primary transition-colors truncate max-w-[165px] cursor-pointer"
               >
                 <Settings className="size-3 text-primary shrink-0" />
-                <span className="truncate">{selectedModel}</span>
+                <span className="truncate">{formatModelDisplayName(selectedModel)}</span>
               </button>
               {!isPro && (
                 <button

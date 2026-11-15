@@ -60,10 +60,10 @@ function formatFriendlyPipelineError(err: unknown): string {
   }
   if (err instanceof GeminiError) {
     if (err.code === "MISSING_KEY" || err.code === "INVALID_KEY") {
-      return "The server's Gemini API key is missing or invalid. Check Settings > Secrets.";
+      return "The server's API key is missing or invalid. Check Settings > Models.";
     }
     if (err.code === "RATE_LIMIT") {
-      return "Gemini API rate limit reached (429). Please wait a moment and try again.";
+      return "API rate limit reached (429). Please wait a moment and try again.";
     }
     if (err.code === "MALFORMED") {
       return "The model returned malformed output after retrying. Try simplifying your prompt or switching models.";

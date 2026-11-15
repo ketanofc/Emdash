@@ -27,6 +27,7 @@ import { TEMPLATES, type TemplateItem } from "@/src/data/templates";
 import {
   FALLBACK_GEMINI_MODEL,
   GeminiError,
+  formatModelDisplayName,
   listGeminiModels,
   pickDefaultFlashModel,
 } from "@/src/lib/gemini";
@@ -80,7 +81,7 @@ export function PricingDialog({
             </div>
             <ul className="text-xs text-muted-foreground space-y-1.5 flex-1">
               <li>Free to start · Supported by ads</li>
-              <li>Server-managed Gemini models</li>
+              <li>Server-managed models</li>
               <li>Full project .zip code export</li>
               <li>Static &amp; React + TypeScript modes</li>
             </ul>
@@ -448,7 +449,7 @@ export function SupportDocsDialog({
                   Free to start · Supported by ads
                 </h3>
                 <p>
-                  Emdash is free to start and supported by clearly labeled sponsors, powered by Gemini models on the server so anyone can start building right away. You can also upgrade to Emdash Pro for an ad-free workspace.
+                  Emdash is free to start and supported by clearly labeled sponsors, powered by models on the server so anyone can start building right away. You can also upgrade to Emdash Pro for an ad-free workspace.
                 </p>
               </div>
               <div>
@@ -511,7 +512,7 @@ export function SupportDocsDialog({
                   Sandboxed live previews &amp; API isolation
                 </h3>
                 <p>
-                  Every generated web application runs inside an isolated sandboxed iframe preview container, keeping preview execution separated from your host session. All Gemini API calls run exclusively through server endpoints.
+                  Every generated web application runs inside an isolated sandboxed iframe preview container, keeping preview execution separated from your host session. All model API calls run exclusively through server endpoints.
                 </p>
               </div>
               <div>
@@ -809,18 +810,15 @@ export function ModelsDialog({
   const [status, setStatus] = useState<ModelLoadStatus>({ state: "idle" });
 
   const loadModels = async (preferSelection = true, explicitKey?: string) => {
-    setStatus({ state: "loading", message: "Loading available Gemini models from server…" });
+    setStatus({ state: "loading", message: "Loading available models…" });
     try {
       const keyToUse = explicitKey !== undefined ? explicitKey : apiKey;
       const listRaw = await listGeminiModels(keyToUse || undefined);
       const list = listRaw.filter((m) => !/(?:tts|audio|image|live|robotics|computer-use)/i.test(m.id));
 
       if (list.length === 0) {
-        setModels([]);
-        setStatus({
-          state: "error",
-          message: "No generateContent-capable text models were returned by the server.",
-        });
+        setModels(defaultFallbackList);
+        setStatus({ state: "idle" });
         return;
       }
       setModels(list);
@@ -833,10 +831,14 @@ export function ModelsDialog({
             : preferred
         );
       }
-      setStatus({
-        state: "ready",
-        message: `Key valid · ${list.length} server models loaded`,
-      });
+      if (keyToUse && keyToUse.trim()) {
+        setStatus({
+          state: "ready",
+          message: `Key valid · ${list.length} models loaded`,
+        });
+      } else {
+        setStatus({ state: "idle" });
+      }
     } catch (err: unknown) {
       if (err instanceof GeminiError) {
         setStatus({
@@ -847,7 +849,7 @@ export function ModelsDialog({
       }
       setStatus({
         state: "error",
-        message: "Could not validate API key or load models from server.",
+        message: "Could not validate API key or load models.",
       });
     }
   };
@@ -886,15 +888,26 @@ export function ModelsDialog({
     void loadModels(true, "");
   };
 
+  const defaultFallbackList: GeminiModelOption[] = [
+    { id: "gemini-3.5-flash", displayName: "Gemini 3.5 Flash (Default)" },
+    { id: "gemini-3.5-flash-lite", displayName: "Gemini 3.5 Flash Lite" },
+    { id: "gemini-4-hydrogen", displayName: "Gemini 4 Hydrogen" },
+    { id: "gemini-2.5-flash", displayName: "Gemini 2.5 Flash" },
+    { id: "gemini-4-argon", displayName: "Gemini 4 Argon" },
+  ];
+
   const availableOptions: GeminiModelOption[] =
     models.length > 0
       ? models
-      : [
-          {
-            id: selectedModel || FALLBACK_GEMINI_MODEL,
-            displayName: selectedModel || FALLBACK_GEMINI_MODEL,
-          },
-        ];
+      : defaultFallbackList.some((m) => m.id === selectedModel)
+        ? defaultFallbackList
+        : [
+            {
+              id: selectedModel || FALLBACK_GEMINI_MODEL,
+              displayName: formatModelDisplayName(selectedModel || FALLBACK_GEMINI_MODEL),
+            },
+            ...defaultFallbackList,
+          ];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -904,25 +917,25 @@ export function ModelsDialog({
           <DialogHeader className="pr-7 min-w-0">
             <DialogTitle>Settings · Models</DialogTitle>
             <DialogDescription className="text-xs sm:text-sm break-words">
-              Connect your own Gemini API key and choose which model generates apps on the server.
+              Connect your own API key and choose which model generates apps on the server.
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid grid-cols-[minmax(0,1fr)] min-w-0 gap-3">
             <div className="grid grid-cols-[minmax(0,1fr)] min-w-0 gap-1.5">
               <label
-                htmlFor="gemini-api-key-input"
+                htmlFor="api-key-input"
                 className="font-mono uppercase text-[11px] text-muted-foreground"
               >
-                Gemini API Key
+                API Key
               </label>
               <div className="flex gap-2 min-w-0">
                 <input
-                  id="gemini-api-key-input"
+                  id="api-key-input"
                   type="password"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="AIzaSy..."
+                  placeholder="Enter your API key..."
                   className="h-9 w-full min-w-0 border border-edge bg-background px-3 font-mono text-xs outline-none focus-visible:border-primary"
                 />
                 <Button
@@ -941,7 +954,7 @@ export function ModelsDialog({
             <div className="grid grid-cols-[minmax(0,1fr)] min-w-0 gap-1.5">
               <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
                 <label
-                  htmlFor="gemini-model-select"
+                  htmlFor="model-select"
                   className="font-mono uppercase text-[11px] text-muted-foreground"
                 >
                   Model
@@ -961,7 +974,7 @@ export function ModelsDialog({
               </div>
               <Select value={selectedModel} onValueChange={setSelectedModel}>
                 <SelectTrigger
-                  id="gemini-model-select"
+                  id="model-select"
                   className="h-9 w-full min-w-0 border-edge bg-background font-mono text-xs"
                 >
                   <SelectValue placeholder="Select a Gemini model" />
@@ -969,9 +982,7 @@ export function ModelsDialog({
                 <SelectContent>
                   {availableOptions.map((m) => (
                     <SelectItem key={m.id} value={m.id} className="font-mono text-xs">
-                      {m.displayName !== m.id
-                        ? `${m.displayName} (${m.id})`
-                        : m.id}
+                      {formatModelDisplayName(m.id, m.displayName)}
                     </SelectItem>
                   ))}
                 </SelectContent>
