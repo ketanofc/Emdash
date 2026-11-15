@@ -16,7 +16,6 @@ import {
 } from "@/src/lib/fileAttachment";
 import type { AttachedFile } from "@/src/types";
 import { cn } from "@/src/lib/utils";
-import { toast } from "sonner";
 
 interface HomeViewProps {
   prompt: string;
@@ -43,6 +42,7 @@ export function HomeView({
 }: HomeViewProps) {
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [attachments, setAttachments] = useState<AttachedFile[]>([]);
+  const [fileError, setFileError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -68,28 +68,30 @@ export function HomeView({
 
     const remainingSlots = MAX_ATTACHMENTS - attachments.length;
     if (remainingSlots <= 0) {
-      toast.error(`Maximum ${MAX_ATTACHMENTS} reference files per prompt`);
+      setFileError(`Maximum ${MAX_ATTACHMENTS} reference files per prompt.`);
       return;
     }
 
     const batch = incoming.slice(0, remainingSlots);
-    if (incoming.length > remainingSlots) {
-      toast.info(`Added first ${remainingSlots} file(s); limit is ${MAX_ATTACHMENTS}`);
-    }
+    let nextError: string | null =
+      incoming.length > remainingSlots
+        ? `Added first ${remainingSlots} file(s); limit is ${MAX_ATTACHMENTS}.`
+        : null;
 
     const processed: AttachedFile[] = [];
     for (const file of batch) {
       if (file.size > MAX_FILE_BYTES) {
-        toast.error(`${file.name} exceeds 4 MB limit`);
+        nextError = `${file.name} exceeds the 4 MB size limit.`;
         continue;
       }
       try {
         processed.push(await processUploadedFile(file));
       } catch {
-        toast.error(`Could not read ${file.name}`);
+        nextError = `Could not read ${file.name}.`;
       }
     }
 
+    setFileError(nextError);
     if (processed.length > 0) {
       setAttachments((prev) => [...prev, ...processed]);
     }
@@ -118,6 +120,7 @@ export function HomeView({
       attachments
     );
     setAttachments([]);
+    setFileError(null);
   };
 
   return (
@@ -238,6 +241,20 @@ export function HomeView({
               </div>
             )}
 
+            {fileError && (
+              <div className="flex items-center justify-between gap-2 mt-1 mb-1.5 border border-destructive/40 bg-destructive/5 px-2.5 py-1 text-[11px] font-mono text-destructive">
+                <span>{fileError}</span>
+                <button
+                  type="button"
+                  onClick={() => setFileError(null)}
+                  aria-label="Dismiss error"
+                  className="hover:opacity-75 cursor-pointer shrink-0"
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            )}
+
             <div className="flex items-center gap-2 pt-2.5 border-t border-edge mt-1">
               <input
                 ref={fileInputRef}
@@ -299,9 +316,7 @@ export function HomeView({
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
-                  onClick={() =>
-                    toast.info("CloudNest hosting: 3 months free for Emdash builders")
-                  }
+                  onClick={onOpenPricing}
                   className="h-7 px-2.5 border border-edge bg-card hover:border-primary hover:text-primary font-mono uppercase text-[10px] text-foreground transition-colors cursor-pointer"
                 >
                   Learn more
@@ -389,9 +404,7 @@ export function HomeView({
             {!isPro ? (
               <button
                 type="button"
-                onClick={() =>
-                  toast.info("CloudNest hosting: 3 months free for Emdash builders")
-                }
+                onClick={onOpenPricing}
                 className="group bg-surface hover:bg-muted/60 p-5 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring flex flex-col justify-between cursor-pointer"
               >
                 <div>

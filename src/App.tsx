@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
-import { Toaster } from "@/src/components/ui/sonner";
 import { Navbar } from "@/src/components/Navbar";
 import { HomeView } from "@/src/components/HomeView";
 import { WorkspaceView } from "@/src/components/WorkspaceView";
@@ -289,7 +287,6 @@ export default function App() {
               : m
           )
         );
-        toast.error(errMessage);
       } finally {
         setIsGenerating(false);
       }
@@ -316,10 +313,7 @@ export default function App() {
   };
 
   const handleGoHome = () => {
-    if (isGenerating) {
-      toast.info("Wait for the current build to finish");
-      return;
-    }
+    if (isGenerating) return;
     setMode("home");
     setMessages([]);
     setVersions([]);
@@ -354,7 +348,6 @@ export default function App() {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    toast.success(`Exported ${version.slug}-v${version.version}.html`);
   };
 
   const handlePublish = async (version: AppVersion) => {
@@ -373,10 +366,8 @@ export default function App() {
         throw new Error(data.error || "Failed to publish site");
       }
       setPublishState({ open: true, version, path: data.path });
-    } catch (err: unknown) {
-      toast.error(
-        err instanceof Error ? err.message : "Could not publish app"
-      );
+    } catch {
+      // ignore failed publish when server rejects
     }
   };
 
@@ -455,8 +446,6 @@ export default function App() {
         onSignIn={handleSignIn}
         onSignOut={handleSignOut}
       />
-
-      <Toaster />
     </div>
   );
 }

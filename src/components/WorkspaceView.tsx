@@ -42,7 +42,6 @@ import type {
   WorkspaceTab,
 } from "@/src/types";
 import { cn } from "@/src/lib/utils";
-import { toast } from "sonner";
 
 interface WorkspaceViewProps {
   messages: ChatMessage[];
@@ -84,6 +83,7 @@ export function WorkspaceView({
 }: WorkspaceViewProps) {
   const [followUp, setFollowUp] = useState("");
   const [attachments, setAttachments] = useState<AttachedFile[]>([]);
+  const [fileError, setFileError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("preview");
   const [device, setDevice] = useState<DeviceViewport>("desktop");
@@ -108,24 +108,30 @@ export function WorkspaceView({
 
     const remainingSlots = MAX_ATTACHMENTS - attachments.length;
     if (remainingSlots <= 0) {
-      toast.error(`Maximum ${MAX_ATTACHMENTS} reference files per prompt`);
+      setFileError(`Maximum ${MAX_ATTACHMENTS} reference files per prompt.`);
       return;
     }
 
     const batch = incoming.slice(0, remainingSlots);
+    let nextError: string | null =
+      incoming.length > remainingSlots
+        ? `Added first ${remainingSlots} file(s); limit is ${MAX_ATTACHMENTS}.`
+        : null;
+
     const processed: AttachedFile[] = [];
     for (const file of batch) {
       if (file.size > MAX_FILE_BYTES) {
-        toast.error(`${file.name} exceeds 4 MB limit`);
+        nextError = `${file.name} exceeds the 4 MB limit.`;
         continue;
       }
       try {
         processed.push(await processUploadedFile(file));
       } catch {
-        toast.error(`Could not read ${file.name}`);
+        nextError = `Could not read ${file.name}.`;
       }
     }
 
+    setFileError(nextError);
     if (processed.length > 0) {
       setAttachments((prev) => [...prev, ...processed]);
     }
@@ -152,6 +158,7 @@ export function WorkspaceView({
     const filesToSend = attachments;
     setFollowUp("");
     setAttachments([]);
+    setFileError(null);
     onSendFollowUp(
       trimmed || "Update the app using the attached reference.",
       filesToSend
@@ -163,10 +170,9 @@ export function WorkspaceView({
     try {
       await navigator.clipboard.writeText(currentApp.html);
       setCopiedCode(true);
-      toast.success("Copied HTML to clipboard");
       window.setTimeout(() => setCopiedCode(false), 1800);
     } catch {
-      toast.error("Unable to copy to clipboard");
+      // clipboard unavailable
     }
   };
 
@@ -417,6 +423,20 @@ export function WorkspaceView({
                       </button>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {fileError && (
+                <div className="flex items-center justify-between gap-2 px-2 py-1 border border-destructive/40 bg-destructive/5 text-[10px] font-mono text-destructive">
+                  <span>{fileError}</span>
+                  <button
+                    type="button"
+                    onClick={() => setFileError(null)}
+                    aria-label="Dismiss error"
+                    className="hover:opacity-75 cursor-pointer shrink-0"
+                  >
+                    <X className="size-3" />
+                  </button>
                 </div>
               )}
 

@@ -12,7 +12,6 @@ import { Button } from "@/src/components/ui/button";
 import { CornerBrackets } from "@/src/components/CornerBrackets";
 import { TEMPLATES, type TemplateItem } from "@/src/data/templates";
 import type { AppVersion, UserSession } from "@/src/types";
-import { toast } from "sonner";
 
 interface AdRewardDialogProps {
   open: boolean;
@@ -40,7 +39,6 @@ export function AdRewardDialog({
       setCountdown(null);
       onRewardClaimed(1200);
       onOpenChange(false);
-      toast.success("Added 20 minutes to today’s build time");
       return;
     }
     const timer = window.setTimeout(() => {
@@ -160,7 +158,6 @@ export function PricingDialog({
               onClick={() => {
                 onSelectPlan("free");
                 onOpenChange(false);
-                toast.success("Switched to Emdash Free");
               }}
               className="border-edge font-mono uppercase text-xs"
             >
@@ -195,7 +192,6 @@ export function PricingDialog({
               onClick={() => {
                 onSelectPlan("pro");
                 onOpenChange(false);
-                toast.success("Activated Emdash Pro workspace");
               }}
               className="font-mono uppercase text-xs"
             >
@@ -294,10 +290,9 @@ export function PublishDialog({
     try {
       await navigator.clipboard.writeText(fullUrl);
       setCopied(true);
-      toast.success("Copied published URL");
       window.setTimeout(() => setCopied(false), 1800);
     } catch {
-      toast.error("Unable to copy URL");
+      // clipboard unavailable
     }
   };
 
@@ -376,14 +371,16 @@ export function AuthDialog({
 }: AuthDialogProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedEmail = email.trim();
     if (!trimmedEmail || !trimmedEmail.includes("@")) {
-      toast.error("Enter a valid email address");
+      setFormError("Enter a valid email address");
       return;
     }
+    setFormError(null);
     const displayName = name.trim() || trimmedEmail.split("@")[0];
     onSignIn({
       name: displayName,
@@ -391,7 +388,6 @@ export function AuthDialog({
       plan: user?.plan ?? "free",
     });
     onOpenChange(false);
-    toast.success(`Signed in as ${displayName}`);
   };
 
   return (
@@ -429,7 +425,6 @@ export function AuthDialog({
                 onClick={() => {
                   onSignOut();
                   onOpenChange(false);
-                  toast.success("Signed out");
                 }}
                 className="font-mono uppercase text-xs"
               >
@@ -471,6 +466,11 @@ export function AuthDialog({
                   className="h-9 border border-edge bg-background px-3 text-sm outline-none focus-visible:border-primary"
                 />
               </label>
+              {formError && (
+                <div className="border border-destructive/40 bg-destructive/5 px-2.5 py-1.5 text-xs font-mono text-destructive">
+                  {formError}
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button
