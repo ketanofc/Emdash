@@ -144,7 +144,7 @@ function parseGeminiSdkError(err: unknown): {
       status: 403,
       code: "INVALID_KEY",
       message:
-        "Your Gemini API key was rejected (400/401/403). Open Settings > Models to check or update your key.",
+        "Your Gemini API key was rejected (400/401/403). Please verify your API key above and click Test Key.",
     };
   }
 
