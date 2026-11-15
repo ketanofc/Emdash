@@ -306,7 +306,7 @@ export function HomeView({
                 </span>
                 <div className="min-w-0">
                   <div className="text-xs font-medium text-foreground truncate">
-                    CloudNest Edge Hosting — Deploy exported HTML in seconds
+                    CloudNest Edge Hosting: Deploy exported HTML in seconds
                   </div>
                   <div className="font-mono uppercase text-[10px] text-muted-foreground mt-0.5">
                     Sponsored · 3 months free for Emdash builders
