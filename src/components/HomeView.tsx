@@ -4,7 +4,6 @@ import { Button } from "@/src/components/ui/button";
 import { Textarea } from "@/src/components/ui/textarea";
 import { CornerBrackets } from "@/src/components/CornerBrackets";
 import {
-  QUICK_CHIPS,
   ROTATING_PLACEHOLDERS,
   TEMPLATES,
   type TemplateItem,
@@ -281,22 +280,42 @@ export function HomeView({
             </div>
           </div>
 
-          {/* Quick Prompt Bar */}
-          <div className="w-full max-w-2xl grid grid-cols-2 sm:grid-cols-4 gap-px bg-edge border border-edge mt-4">
-            {QUICK_CHIPS.map((chip) => (
-              <button
-                key={chip.label}
-                type="button"
-                onClick={() => {
-                  onPromptChange(chip.prompt);
-                  textareaRef.current?.focus();
-                }}
-                className="bg-background hover:bg-card hover:text-primary px-3 py-2.5 font-mono uppercase text-[11px] text-muted-foreground transition-colors truncate cursor-pointer"
-              >
-                {chip.label}
-              </button>
-            ))}
-          </div>
+          {/* Ad Sponsor Banner */}
+          {!isPro && (
+            <div className="w-full max-w-2xl mt-4 border border-dashed border-edge bg-background px-3.5 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="font-mono uppercase text-[10px] font-semibold border border-edge px-1.5 py-0.5 text-primary bg-card shrink-0">
+                  Ad
+                </span>
+                <div className="min-w-0">
+                  <div className="text-xs font-medium text-foreground truncate">
+                    CloudNest Edge Hosting — Deploy exported HTML in seconds
+                  </div>
+                  <div className="font-mono uppercase text-[10px] text-muted-foreground mt-0.5">
+                    Sponsored · 3 months free for Emdash builders
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() =>
+                    toast.info("CloudNest hosting: 3 months free for Emdash builders")
+                  }
+                  className="h-7 px-2.5 border border-edge bg-card hover:border-primary hover:text-primary font-mono uppercase text-[10px] text-foreground transition-colors cursor-pointer"
+                >
+                  Learn more
+                </button>
+                <button
+                  type="button"
+                  onClick={onOpenPricing}
+                  className="h-7 px-2.5 border border-edge bg-background hover:border-neutral font-mono uppercase text-[10px] text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                >
+                  Go ad-free
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
