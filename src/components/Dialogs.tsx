@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { Check, Copy, Download, ExternalLink } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  RefreshCw,
+  Trash2,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -8,105 +14,30 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/src/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/src/components/ui/select";
 import { Button } from "@/src/components/ui/button";
 import { CornerBrackets } from "@/src/components/CornerBrackets";
 import { TEMPLATES, type TemplateItem } from "@/src/data/templates";
-import type { AppVersion, UserSession } from "@/src/types";
+import {
+  FALLBACK_GEMINI_MODEL,
+  GeminiError,
+  listGeminiModels,
+  pickDefaultFlashModel,
+} from "@/src/lib/gemini";
+import {
+  loadEncryptedApiKey,
+  saveEncryptedApiKey,
+  removeEncryptedApiKey,
+} from "@/src/lib/storage";
+import type { GeminiModelOption, UserSession } from "@/src/types";
 import type { DocSection } from "@/src/components/Footer";
 import { cn } from "@/src/lib/utils";
-
-interface AdRewardDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onRewardClaimed: (seconds: number) => void;
-}
-
-export function AdRewardDialog({
-  open,
-  onOpenChange,
-  onRewardClaimed,
-}: AdRewardDialogProps) {
-  const [countdown, setCountdown] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!open) {
-      setCountdown(null);
-      return;
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (countdown === null) return;
-    if (countdown <= 0) {
-      setCountdown(null);
-      onRewardClaimed(1200);
-      onOpenChange(false);
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      setCountdown((c) => (c === null ? null : c - 1));
-    }, 300);
-    return () => window.clearTimeout(timer);
-  }, [countdown, onOpenChange, onRewardClaimed]);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-edge bg-card">
-        <CornerBrackets />
-        <DialogHeader>
-          <DialogTitle>Add more build time</DialogTitle>
-          <DialogDescription>
-            Watch a short sponsored spot to add 20 minutes to today’s limit.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex items-center gap-3 border border-dashed border-edge p-3 bg-background text-xs">
-          <span className="font-mono uppercase text-[10px] font-semibold border border-edge px-1.5 py-0.5 text-primary bg-card">
-            Ad
-          </span>
-          <div className="flex-1 min-w-0">
-            <div className="font-medium text-foreground">
-              {countdown !== null
-                ? "Playing CloudNest sponsor spot…"
-                : "Rewarded video"}
-            </div>
-            <div className="font-mono uppercase text-[11px] text-muted-foreground tabular-nums mt-0.5">
-              {countdown !== null ? `${countdown}s remaining` : "15 seconds"}
-            </div>
-          </div>
-          {countdown !== null && (
-            <div className="w-16 h-1.5 bg-muted overflow-hidden">
-              <div
-                className="h-full bg-primary transition-all duration-300"
-                style={{ width: `${((15 - countdown) / 15) * 100}%` }}
-              />
-            </div>
-          )}
-        </div>
-
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={countdown !== null}
-            className="border-edge font-mono uppercase text-xs"
-          >
-            Not now
-          </Button>
-          <Button
-            type="button"
-            onClick={() => setCountdown(15)}
-            disabled={countdown !== null}
-            className="font-mono uppercase text-xs"
-          >
-            {countdown !== null ? `Ad ends in ${countdown}s` : "Watch ad"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 interface PricingDialogProps {
   open: boolean;
@@ -148,10 +79,10 @@ export function PricingDialog({
               </div>
             </div>
             <ul className="text-xs text-muted-foreground space-y-1.5 flex-1">
-              <li>5 hours daily build time</li>
-              <li>+20m bonus via rewarded ads</li>
-              <li>Full HTML code export</li>
-              <li>Ad-supported workspace</li>
+              <li>Free to start · Supported by ads</li>
+              <li>Server-managed Gemini models</li>
+              <li>Full project .zip code export</li>
+              <li>Static &amp; React + TypeScript modes</li>
             </ul>
             <Button
               type="button"
@@ -182,10 +113,10 @@ export function PricingDialog({
               </div>
             </div>
             <ul className="text-xs text-muted-foreground space-y-1.5 flex-1">
-              <li>Unlimited daily build time</li>
-              <li>Zero ads in composer or wait states</li>
-              <li>Instant live publish routes</li>
-              <li>Priority model throughput</li>
+              <li>Ad-free workspace experience</li>
+              <li>Zero sponsor banners or wait spots</li>
+              <li>Full project .zip code export</li>
+              <li>Priority support</li>
             </ul>
             <Button
               type="button"
@@ -264,98 +195,6 @@ export function TemplatesDialog({
   );
 }
 
-interface PublishDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  version: AppVersion | null;
-  publishedPath: string | null;
-  onExport: (version: AppVersion) => void;
-}
-
-export function PublishDialog({
-  open,
-  onOpenChange,
-  version,
-  publishedPath,
-  onExport,
-}: PublishDialogProps) {
-  const [copied, setCopied] = useState(false);
-
-  if (!version) return null;
-
-  const fullUrl =
-    typeof window !== "undefined" && publishedPath
-      ? `${window.location.origin}${publishedPath}`
-      : `https://${version.slug}.emdash.site`;
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(fullUrl);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
-    } catch {
-      // clipboard unavailable
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg border-edge bg-card">
-        <CornerBrackets />
-        <DialogHeader className="pr-6">
-          <DialogTitle className="truncate">Published {version.title}</DialogTitle>
-          <DialogDescription>
-            Version {version.version} is live on this server and ready to share or download.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex items-center gap-2 min-w-0 w-full border border-edge bg-background p-2">
-          <span
-            title={fullUrl}
-            className="flex-1 min-w-0 truncate text-xs font-mono text-foreground px-1"
-          >
-            {fullUrl}
-          </span>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleCopy}
-            className="shrink-0 border-edge font-mono uppercase text-xs"
-          >
-            {copied ? (
-              <Check className="size-3.5 text-primary" />
-            ) : (
-              <Copy className="size-3.5" />
-            )}
-            <span>{copied ? "Copied" : "Copy"}</span>
-          </Button>
-        </div>
-
-        <DialogFooter className="min-w-0 flex-wrap sm:justify-between">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onExport(version)}
-            className="border-edge font-mono uppercase text-xs"
-          >
-            <Download className="size-3.5" />
-            <span>Download HTML</span>
-          </Button>
-          {publishedPath && (
-            <Button asChild className="font-mono uppercase text-xs">
-              <a href={publishedPath} target="_blank" rel="noopener noreferrer">
-                <span>Open live route</span>
-                <ExternalLink className="size-3.5" />
-              </a>
-            </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 interface AuthDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -409,7 +248,7 @@ export function AuthDialog({
                 Plan: {user.plan === "pro" ? "Emdash Pro" : "Emdash Free"}
               </div>
               <div className="text-muted-foreground">
-                Your session and daily build quota are saved locally in this browser.
+                Your session, workspace preferences, and plan state are saved locally in this browser.
               </div>
             </div>
             <DialogFooter>
@@ -523,7 +362,7 @@ export function SupportDocsDialog({
         <DialogHeader className="pr-6">
           <DialogTitle>Support documentation</DialogTitle>
           <DialogDescription>
-            Guides for prompting, file attachments, daily build time, and exporting apps.
+            Guides for prompting, file attachments, BYOK models, and exporting apps.
           </DialogDescription>
         </DialogHeader>
 
@@ -606,18 +445,18 @@ export function SupportDocsDialog({
             <>
               <div>
                 <h3 className="text-sm font-semibold text-foreground mb-1">
-                  Free daily build quota (5 hours/day)
+                  Free to start · Supported by ads
                 </h3>
                 <p>
-                  Every free user receives 5 hours of daily build quota, resetting every 24 hours. When your daily allowance runs low, you can watch a short 15-second sponsored spot to add 20 bonus minutes immediately, or upgrade to Emdash Pro for unlimited ad-free builds.
+                  Emdash is free to start and supported by clearly labeled sponsors, powered by Gemini models on the server so anyone can start building right away. You can also upgrade to Emdash Pro for an ad-free workspace.
                 </p>
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-foreground mb-1">
-                  Exporting HTML &amp; live publishing
+                  Exporting your project as .zip
                 </h3>
                 <p>
-                  Click Download HTML to save a self-contained single-file HTML bundle you can host anywhere, or click Publish to generate a live shareable route directly from the workspace.
+                  Click Export in the workspace toolbar to download all generated source files (static HTML/CSS/JS or React + TypeScript + Tailwind) as a ready-to-run .zip archive.
                 </p>
               </div>
             </>
@@ -630,7 +469,7 @@ export function SupportDocsDialog({
                   Privacy Policy &amp; local browser storage
                 </h3>
                 <p>
-                  Your theme preference, daily build quota counter, and local account profile are stored in your browser&apos;s localStorage. We do not sell personal data or run invasive cross-site tracking scripts.
+                  Your theme preference, active model selection, generated app versions, and local account profile stay in your browser. We do not sell personal data or run cross-site tracking scripts.
                 </p>
               </div>
               <div>
@@ -659,7 +498,7 @@ export function SupportDocsDialog({
                   Acceptable use &amp; daily quota
                 </h3>
                 <p>
-                  Free accounts receive 5 hours of daily build quota, supported by clearly labeled sponsor slots. Automated scraping, abusive traffic, or attempts to bypass server safeguards are prohibited.
+                  Emdash is free to start and supported by clearly labeled sponsor slots. Automated scraping, abusive traffic, or attempts to bypass server safeguards are prohibited.
                 </p>
               </div>
             </>
@@ -672,7 +511,7 @@ export function SupportDocsDialog({
                   Sandboxed live previews &amp; API isolation
                 </h3>
                 <p>
-                  Every generated web application runs inside an isolated iframe preview container, keeping preview execution separated from your host session. All model credentials stay strictly server-side behind encrypted API routes.
+                  Every generated web application runs inside an isolated sandboxed iframe preview container, keeping preview execution separated from your host session. All Gemini API calls run exclusively through server endpoints.
                 </p>
               </div>
               <div>
@@ -821,7 +660,7 @@ export function SponsorSlotDialog({
             <DialogHeader className="pr-6">
               <DialogTitle>Sponsor a slot on Emdash</DialogTitle>
               <DialogDescription>
-                Support free daily build hours by featuring your product in a native, non-intrusive placement.
+                Support free access by featuring your product in a native, non-intrusive placement.
               </DialogDescription>
             </DialogHeader>
 
@@ -937,6 +776,264 @@ export function SponsorSlotDialog({
             </DialogFooter>
           </form>
         )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+interface ModelsDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  initialModel: string;
+  onSaveModel: (model: string) => void;
+}
+
+type ModelLoadStatus =
+  | { state: "idle"; message?: string }
+  | { state: "loading"; message: string }
+  | { state: "ready"; message: string }
+  | { state: "error"; message: string };
+
+export function ModelsDialog({
+  open,
+  onOpenChange,
+  initialModel,
+  onSaveModel,
+}: ModelsDialogProps) {
+  const [models, setModels] = useState<GeminiModelOption[]>([]);
+  const [selectedModel, setSelectedModel] = useState(
+    initialModel || FALLBACK_GEMINI_MODEL
+  );
+  const [apiKey, setApiKey] = useState("");
+  const [hasStoredKey, setHasStoredKey] = useState(false);
+  const [status, setStatus] = useState<ModelLoadStatus>({ state: "idle" });
+
+  const loadModels = async (preferSelection = true, explicitKey?: string) => {
+    setStatus({ state: "loading", message: "Loading available Gemini models from server…" });
+    try {
+      const keyToUse = explicitKey !== undefined ? explicitKey : apiKey;
+      const listRaw = await listGeminiModels(keyToUse || undefined);
+      const list = listRaw.filter((m) => !/(?:tts|audio|image|live|robotics|computer-use)/i.test(m.id));
+
+      if (list.length === 0) {
+        setModels([]);
+        setStatus({
+          state: "error",
+          message: "No generateContent-capable text models were returned by the server.",
+        });
+        return;
+      }
+      setModels(list);
+      const preferred = pickDefaultFlashModel(list);
+      if (preferSelection) {
+        setSelectedModel((prev) =>
+          list.some((m) => m.id === prev) &&
+          !/(?:tts|audio|image|live|robotics|computer-use)/i.test(prev)
+            ? prev
+            : preferred
+        );
+      }
+      setStatus({
+        state: "ready",
+        message: `Key valid · ${list.length} server models loaded`,
+      });
+    } catch (err: unknown) {
+      if (err instanceof GeminiError) {
+        setStatus({
+          state: "error",
+          message: err.message,
+        });
+        return;
+      }
+      setStatus({
+        state: "error",
+        message: "Could not validate API key or load models from server.",
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (open) {
+      setSelectedModel(initialModel || FALLBACK_GEMINI_MODEL);
+      void (async () => {
+        const stored = await loadEncryptedApiKey();
+        if (stored) {
+          setApiKey(stored);
+          setHasStoredKey(true);
+          void loadModels(true, stored);
+        } else {
+          setApiKey("");
+          setHasStoredKey(false);
+          void loadModels(true, "");
+        }
+      })();
+    }
+  }, [open, initialModel]);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (apiKey.trim()) {
+      await saveEncryptedApiKey(apiKey.trim());
+    }
+    onSaveModel(selectedModel || FALLBACK_GEMINI_MODEL);
+    onOpenChange(false);
+  };
+
+  const handleRemoveKey = async () => {
+    await removeEncryptedApiKey();
+    setApiKey("");
+    setHasStoredKey(false);
+    void loadModels(true, "");
+  };
+
+  const availableOptions: GeminiModelOption[] =
+    models.length > 0
+      ? models
+      : [
+          {
+            id: selectedModel || FALLBACK_GEMINI_MODEL,
+            displayName: selectedModel || FALLBACK_GEMINI_MODEL,
+          },
+        ];
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg border-edge bg-card p-4 sm:p-6 overflow-hidden">
+        <CornerBrackets />
+        <form onSubmit={handleSave} className="grid grid-cols-[minmax(0,1fr)] min-w-0 w-full gap-4">
+          <DialogHeader className="pr-7 min-w-0">
+            <DialogTitle>Settings · Models</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm break-words">
+              Connect your own Gemini API key and choose which model generates apps on the server.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-[minmax(0,1fr)] min-w-0 gap-3">
+            <div className="grid grid-cols-[minmax(0,1fr)] min-w-0 gap-1.5">
+              <label
+                htmlFor="gemini-api-key-input"
+                className="font-mono uppercase text-[11px] text-muted-foreground"
+              >
+                Gemini API Key
+              </label>
+              <div className="flex gap-2 min-w-0">
+                <input
+                  id="gemini-api-key-input"
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="AIzaSy..."
+                  className="h-9 w-full min-w-0 border border-edge bg-background px-3 font-mono text-xs outline-none focus-visible:border-primary"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void loadModels(false, apiKey)}
+                  disabled={status.state === "loading"}
+                  className="h-9 shrink-0 font-mono uppercase text-[11px]"
+                >
+                  Test key
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-[minmax(0,1fr)] min-w-0 gap-1.5">
+              <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
+                <label
+                  htmlFor="gemini-model-select"
+                  className="font-mono uppercase text-[11px] text-muted-foreground"
+                >
+                  Model
+                </label>
+                <button
+                  type="button"
+                  onClick={() => void loadModels(false, apiKey)}
+                  disabled={status.state === "loading"}
+                  className="inline-flex items-center gap-1 font-mono uppercase text-[11px] text-primary hover:underline disabled:opacity-50 cursor-pointer shrink-0"
+                >
+                  <RefreshCw
+                    className={cn("size-3", status.state === "loading" && "animate-spin")}
+                    aria-hidden="true"
+                  />
+                  <span>Refresh models</span>
+                </button>
+              </div>
+              <Select value={selectedModel} onValueChange={setSelectedModel}>
+                <SelectTrigger
+                  id="gemini-model-select"
+                  className="h-9 w-full min-w-0 border-edge bg-background font-mono text-xs"
+                >
+                  <SelectValue placeholder="Select a Gemini model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableOptions.map((m) => (
+                    <SelectItem key={m.id} value={m.id} className="font-mono text-xs">
+                      {m.displayName !== m.id
+                        ? `${m.displayName} (${m.id})`
+                        : m.id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {status.state !== "idle" && (
+              <div
+                className={cn(
+                  "flex items-start gap-2 min-w-0 w-full border px-2.5 py-2 text-xs break-words",
+                  status.state === "ready"
+                    ? "border-primary/40 bg-primary/5 text-foreground"
+                    : status.state === "loading"
+                      ? "border-edge bg-background text-muted-foreground"
+                      : "border-destructive/40 bg-destructive/5 text-destructive"
+                )}
+              >
+                {status.state === "loading" ? (
+                  <Loader2 className="size-3.5 animate-spin shrink-0 mt-0.5 text-primary" />
+                ) : status.state === "ready" ? (
+                  <CheckCircle2 className="size-3.5 shrink-0 mt-0.5 text-primary" />
+                ) : (
+                  <AlertCircle className="size-3.5 shrink-0 mt-0.5" />
+                )}
+                <span className="min-w-0 break-words">{status.message}</span>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="flex-row flex-wrap items-center justify-between gap-2 pt-1 min-w-0">
+            <div>
+              {hasStoredKey && (
+                <button
+                  type="button"
+                  onClick={() => void handleRemoveKey()}
+                  className="inline-flex items-center gap-1 font-mono uppercase text-[11px] text-destructive hover:underline cursor-pointer"
+                >
+                  <Trash2 className="size-3" />
+                  <span>Remove key</span>
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onOpenChange(false)}
+                className="h-9 border-edge font-mono uppercase text-[11px] sm:text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                className="h-9 font-mono uppercase text-[11px] sm:text-xs"
+              >
+                Save
+              </Button>
+            </div>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

@@ -65,17 +65,17 @@ export function Footer({
                   onGoHome();
                   window.scrollTo({ top: 0, behavior: "smooth" });
                 }}
-                className="inline-flex items-center gap-2.5 font-semibold text-base tracking-tight text-foreground hover:opacity-85 transition-opacity focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
+                className="inline-flex items-center gap-1 font-semibold text-base tracking-tight text-foreground hover:opacity-85 transition-opacity focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
               >
                 <img
                   src="/assets/emdash-logo.png"
                   alt=""
-                  className="size-6 object-cover shrink-0"
+                  className="size-4.5 object-cover shrink-0"
                 />
                 <span>Emdash</span>
               </button>
               <p className="mt-3 text-xs sm:text-[13px] leading-relaxed text-muted-foreground max-w-sm">
-                Build web apps, landing pages, and interactive tools from a single prompt. Five free hours daily, supported by transparent sponsors.
+                Build web apps, landing pages, and interactive tools from a single prompt. Free to start · Supported by ads.
               </p>
             </div>
 

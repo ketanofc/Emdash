@@ -1,17 +1,26 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  SandpackLayout,
+  SandpackPreview,
+  SandpackProvider,
+  useErrorMessage,
+  useSandpack,
+} from "@codesandbox/sandpack-react";
 import {
   AlertCircle,
   ArrowUp,
   Check,
   CheckCircle2,
-  Clock,
   Copy,
+  Download,
   File as FileIcon,
   FileCode2,
+  FolderOpen,
   Loader2,
   Monitor,
   Paperclip,
   RotateCw,
+  Settings,
   Smartphone,
   Tablet,
   X,
@@ -34,11 +43,14 @@ import {
   formatFileSize,
   processUploadedFile,
 } from "@/src/lib/fileAttachment";
+import { buildStaticPreviewHtml } from "@/src/lib/pipeline";
 import type {
   AppVersion,
   AttachedFile,
   ChatMessage,
   DeviceViewport,
+  GeneratedFiles,
+  PipelineStage,
   WorkspaceTab,
 } from "@/src/types";
 import { cn } from "@/src/lib/utils";
@@ -50,20 +62,131 @@ interface WorkspaceViewProps {
   onSelectVersion: (version: number) => void;
   isGenerating: boolean;
   isPro: boolean;
-  quotaRemainingSeconds: number;
-  quotaTotalSeconds: number;
-  onOpenQuota: () => void;
+  isDark: boolean;
+  selectedModel: string;
+  onOpenModels: () => void;
   onOpenPricing: () => void;
   onSendFollowUp: (prompt: string, attachments: AttachedFile[]) => void;
+  onRuntimeError: (version: AppVersion, errors: string[]) => void;
   onExport: (version: AppVersion) => void;
-  onPublish: (version: AppVersion) => void;
 }
 
-function formatQuota(secondsRemaining: number): string {
-  const clamped = Math.max(0, secondsRemaining);
-  const hours = Math.floor(clamped / 3600);
-  const mins = Math.floor((clamped % 3600) / 60);
-  return `${hours}h ${String(mins).padStart(2, "0")}m left`;
+const STAGE_LABELS: Record<PipelineStage, string> = {
+  brief: "Understanding your request…",
+  plan: "Planning…",
+  build: "Building…",
+  check: "Checking…",
+  repair: "Fixing…",
+};
+
+function sortFilePaths(paths: string[]): string[] {
+  const priority = [
+    "index.html",
+    "style.css",
+    "app.js",
+    "src/App.tsx",
+    "src/main.tsx",
+    "src/index.css",
+    "src/types.ts",
+  ];
+  return [...paths].sort((a, b) => {
+    const ia = priority.indexOf(a);
+    const ib = priority.indexOf(b);
+    if (ia !== -1 && ib !== -1) return ia - ib;
+    if (ia !== -1) return -1;
+    if (ib !== -1) return 1;
+    return a.localeCompare(b);
+  });
+}
+
+function buildSandpackFiles(
+  files: GeneratedFiles
+): Record<string, { code: string }> {
+  const mapped: Record<string, { code: string }> = {};
+  for (const [rawPath, code] of Object.entries(files)) {
+    const clean = rawPath.replace(/^\/+/, "");
+    mapped[`/${clean}`] = { code };
+  }
+
+  let pkgJson: {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+    main?: string;
+  } = {};
+  if (files["package.json"]) {
+    try {
+      pkgJson = JSON.parse(files["package.json"]) as typeof pkgJson;
+    } catch {
+      pkgJson = {};
+    }
+  }
+
+  mapped["/package.json"] = {
+    code: JSON.stringify(
+      {
+        ...pkgJson,
+        main: "/index.tsx",
+        dependencies: {
+          react: "^18.2.0",
+          "react-dom": "^18.2.0",
+          "lucide-react": "^0.475.0",
+          ...(pkgJson.dependencies ?? {}),
+        },
+      },
+      null,
+      2
+    ),
+  };
+
+  if (!mapped["/index.tsx"]) {
+    const hasMain = Boolean(mapped["/src/main.tsx"]);
+    const hasCss = Boolean(mapped["/src/index.css"]);
+    mapped["/index.tsx"] = {
+      code: hasMain
+        ? `${hasCss ? 'import "./src/index.css";\n' : ""}import "./src/main";\n`
+        : `import { StrictMode } from "react";\nimport { createRoot } from "react-dom/client";\n${hasCss ? 'import "./src/index.css";\n' : ""}import App from "./src/App";\nconst rootEl = document.getElementById("root");\nif (rootEl) { createRoot(rootEl).render(<StrictMode><App /></StrictMode>); }\n`,
+    };
+  }
+
+  const rawIndexHtml =
+    files["index.html"] ||
+    `<!doctype html>\n<html lang="en">\n<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>App</title></head>\n<body><div id="root"></div></body>\n</html>`;
+
+  const strippedIndexHtml = rawIndexHtml.replace(
+    /<script\b[^>]*type=["']module["'][^>]*>\s*<\/script>/gi,
+    ""
+  );
+  const tailwindTokenConfig = `<script>window.tailwind=window.tailwind||{};window.tailwind.config={theme:{extend:{colors:{primary:"var(--primary)",secondary:"var(--secondary)",accent:"var(--accent)",bg:"var(--bg)",background:"var(--bg)",surface:"var(--surface)",text:"var(--text)",muted:"var(--muted)"},fontFamily:{heading:"var(--font-heading)",body:"var(--font-body)"}}}};</script>`;
+
+  mapped["/public/index.html"] = {
+    code: /<\/head>/i.test(strippedIndexHtml)
+      ? strippedIndexHtml.replace(/<\/head>/i, `${tailwindTokenConfig}\n</head>`)
+      : `${tailwindTokenConfig}\n${strippedIndexHtml}`,
+  };
+
+  return mapped;
+}
+
+function SandpackErrorBridge({
+  version,
+  onError,
+}: {
+  version: AppVersion;
+  onError: (version: AppVersion, errors: string[]) => void;
+}) {
+  const errorMessage = useErrorMessage();
+  const { sandpack } = useSandpack();
+  const reportedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const msg = errorMessage || sandpack.error?.message;
+    if (msg && reportedRef.current !== `${version.version}:${msg}`) {
+      reportedRef.current = `${version.version}:${msg}`;
+      onError(version, [msg]);
+    }
+  }, [errorMessage, sandpack.error, version, onError]);
+
+  return null;
 }
 
 export function WorkspaceView({
@@ -73,13 +196,13 @@ export function WorkspaceView({
   onSelectVersion,
   isGenerating,
   isPro,
-  quotaRemainingSeconds,
-  quotaTotalSeconds,
-  onOpenQuota,
+  isDark,
+  selectedModel,
+  onOpenModels,
   onOpenPricing,
   onSendFollowUp,
+  onRuntimeError,
   onExport,
-  onPublish,
 }: WorkspaceViewProps) {
   const [followUp, setFollowUp] = useState("");
   const [attachments, setAttachments] = useState<AttachedFile[]>([]);
@@ -89,6 +212,8 @@ export function WorkspaceView({
   const [device, setDevice] = useState<DeviceViewport>("desktop");
   const [reloadNonce, setReloadNonce] = useState(0);
   const [copiedCode, setCopiedCode] = useState(false);
+  const [selectedFilePath, setSelectedFilePath] = useState<string>("");
+  const [publishToastOpen, setPublishToastOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -102,8 +227,79 @@ export function WorkspaceView({
     versions[versions.length - 1] ??
     null;
 
-  const addFiles = async (fileList: FileList | File[]) => {
-    const incoming = Array.from(fileList);
+  const fileList = useMemo(
+    () => (currentApp ? sortFilePaths(Object.keys(currentApp.files)) : []),
+    [currentApp]
+  );
+
+  useEffect(() => {
+    if (fileList.length === 0) {
+      setSelectedFilePath("");
+    } else if (!selectedFilePath || !fileList.includes(selectedFilePath)) {
+      setSelectedFilePath(fileList[0]);
+    }
+  }, [fileList, selectedFilePath]);
+
+  useEffect(() => {
+    if (!currentApp || currentApp.brief.mode !== "static") return;
+    const pendingErrors: string[] = [];
+    let flushTimer: number | null = null;
+
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data as {
+        type?: string;
+        version?: number;
+        message?: string;
+      } | null;
+      if (
+        !data ||
+        data.type !== "emdash-runtime-error" ||
+        data.version !== currentApp.version ||
+        !data.message
+      ) {
+        return;
+      }
+      if (!pendingErrors.includes(data.message)) {
+        pendingErrors.push(data.message);
+      }
+      if (flushTimer === null) {
+        flushTimer = window.setTimeout(() => {
+          flushTimer = null;
+          if (pendingErrors.length > 0) {
+            onRuntimeError(currentApp, [...pendingErrors]);
+            pendingErrors.length = 0;
+          }
+        }, 350);
+      }
+    };
+
+    window.addEventListener("message", onMessage);
+    return () => {
+      window.removeEventListener("message", onMessage);
+      if (flushTimer !== null) {
+        window.clearTimeout(flushTimer);
+      }
+    };
+  }, [currentApp, onRuntimeError]);
+
+  useEffect(() => {
+    if (!publishToastOpen) return;
+    const timer = window.setTimeout(() => setPublishToastOpen(false), 3800);
+    return () => window.clearTimeout(timer);
+  }, [publishToastOpen]);
+
+  const staticSrcDoc = useMemo(() => {
+    if (!currentApp || currentApp.brief.mode !== "static") return "";
+    return buildStaticPreviewHtml(currentApp.files, currentApp.version);
+  }, [currentApp]);
+
+  const sandpackFiles = useMemo(() => {
+    if (!currentApp || currentApp.brief.mode !== "react-ts") return null;
+    return buildSandpackFiles(currentApp.files);
+  }, [currentApp]);
+
+  const addFiles = async (fileListInput: FileList | File[]) => {
+    const incoming = Array.from(fileListInput);
     if (incoming.length === 0) return;
 
     const remainingSlots = MAX_ATTACHMENTS - attachments.length;
@@ -166,9 +362,11 @@ export function WorkspaceView({
   };
 
   const handleCopyCode = async () => {
-    if (!currentApp) return;
+    if (!currentApp || !selectedFilePath) return;
+    const content = currentApp.files[selectedFilePath];
+    if (!content) return;
     try {
-      await navigator.clipboard.writeText(currentApp.html);
+      await navigator.clipboard.writeText(content);
       setCopiedCode(true);
       window.setTimeout(() => setCopiedCode(false), 1800);
     } catch {
@@ -183,14 +381,8 @@ export function WorkspaceView({
         ? "w-[768px] border-x border-edge"
         : "w-full";
 
-  const quotaPct = Math.max(
-    0,
-    Math.min(100, (quotaRemainingSeconds / quotaTotalSeconds) * 100)
-  );
-  const isQuotaLow = quotaRemainingSeconds < 1800;
-
   return (
-    <div className="flex-1 min-h-0 px-2 pb-2 flex flex-col">
+    <div className="flex-1 min-h-0 px-2 pb-2 flex flex-col relative">
       <div className="flex-1 min-h-0 grid grid-cols-1 grid-rows-[minmax(260px,44%)_1fr] sm:grid-cols-[minmax(250px,310px)_1fr] md:grid-cols-[minmax(290px,350px)_1fr] lg:grid-cols-[minmax(320px,390px)_1fr] sm:grid-rows-[minmax(0,1fr)] border-x border-b border-edge bg-background">
         {/* Chat Pane */}
         <aside className="flex flex-col min-w-0 min-h-0 border-b sm:border-b-0 sm:border-r border-edge bg-background">
@@ -198,37 +390,26 @@ export function WorkspaceView({
             <span className="font-mono uppercase text-[11px] font-medium text-muted-foreground tracking-wider">
               Build Chat
             </span>
-            {isPro ? (
+            <div className="flex items-center gap-1.5 min-w-0">
               <button
                 type="button"
-                onClick={onOpenPricing}
-                className="inline-flex items-center gap-1.5 h-8 px-2.5 border border-edge bg-background font-mono uppercase text-xs text-foreground hover:border-primary transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                onClick={onOpenModels}
+                title="Select Gemini model"
+                className="inline-flex items-center gap-1.5 h-7 px-2 border border-edge bg-background font-mono text-[11px] text-foreground hover:border-primary transition-colors truncate max-w-[165px] cursor-pointer"
               >
-                <Clock className="size-3.5 text-primary" />
-                <span>Unlimited</span>
+                <Settings className="size-3 text-primary shrink-0" />
+                <span className="truncate">{selectedModel}</span>
               </button>
-            ) : (
-              <button
-                type="button"
-                onClick={onOpenQuota}
-                aria-label="Daily build time"
-                className={cn(
-                  "inline-flex items-center gap-2 h-8 px-2.5 border bg-background font-mono uppercase text-xs transition-colors whitespace-nowrap shrink-0 cursor-pointer tabular-nums",
-                  isQuotaLow
-                    ? "border-primary text-primary hover:bg-primary/5"
-                    : "border-edge text-muted-foreground hover:text-foreground hover:border-neutral"
-                )}
-              >
-                <Clock className="size-3.5 text-primary shrink-0" />
-                <span>{formatQuota(quotaRemainingSeconds)}</span>
-                <span className="w-10 h-1 bg-muted overflow-hidden inline-block">
-                  <span
-                    className="block h-full bg-primary transition-all duration-300"
-                    style={{ width: `${quotaPct}%` }}
-                  />
-                </span>
-              </button>
-            )}
+              {!isPro && (
+                <button
+                  type="button"
+                  onClick={onOpenPricing}
+                  className="hidden sm:inline-flex items-center h-7 px-2 border border-edge bg-background font-mono uppercase text-[10px] text-muted-foreground hover:text-foreground hover:border-neutral transition-colors shrink-0 cursor-pointer"
+                >
+                  Free
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="flex-1 overflow-auto p-4 flex flex-col gap-3.5">
@@ -271,16 +452,16 @@ export function WorkspaceView({
                 </div>
               ) : (
                 <div key={msg.id} className="flex flex-col gap-2">
-                  <div className="flex items-center gap-2 font-mono uppercase text-[11px] text-muted-foreground">
+                  <div className="flex items-center gap-1 font-mono uppercase text-[11px] text-muted-foreground">
                     <img
                       src="/assets/emdash-logo.png"
                       alt="Emdash"
-                      className="size-5 object-cover shrink-0"
+                      className="size-4 object-cover shrink-0"
                     />
                     {msg.status === "thinking" ? (
                       <span className="inline-flex items-center gap-1.5 text-primary">
                         <Loader2 className="size-3.5 animate-spin" />
-                        <span>Building your app…</span>
+                        <span>{STAGE_LABELS[msg.stage ?? "brief"]}</span>
                       </span>
                     ) : msg.status === "error" ? (
                       <span className="inline-flex items-center gap-1.5 text-destructive font-medium">
@@ -304,10 +485,10 @@ export function WorkspaceView({
                       </span>
                       <div className="min-w-0">
                         <div className="text-foreground truncate">
-                          Building… ad shows while you wait
+                          CloudNest Edge Hosting — 3 months free
                         </div>
                         <div className="font-mono uppercase text-[10px] text-muted-foreground">
-                          Sponsored
+                          Sponsored while you wait
                         </div>
                       </div>
                     </div>
@@ -337,7 +518,7 @@ export function WorkspaceView({
                     >
                       <FileCode2 className="size-4 text-primary shrink-0" />
                       <span className="font-mono font-medium text-foreground">
-                        index.html
+                        View project files
                       </span>
                       <span className="ml-auto font-mono text-muted-foreground tabular-nums">
                         v{msg.version}
@@ -583,7 +764,7 @@ export function WorkspaceView({
 
             <div className="hidden lg:flex flex-1 min-w-[120px] h-8 items-center border border-edge bg-background px-2.5 text-xs font-mono text-muted-foreground truncate">
               {currentApp
-                ? `${currentApp.slug}.emdash.site`
+                ? `${currentApp.slug}.emdash.site · ${currentApp.brief.mode}`
                 : "untitled.emdash.site"}
             </div>
 
@@ -606,19 +787,22 @@ export function WorkspaceView({
                 size="sm"
                 onClick={() => currentApp && onExport(currentApp)}
                 disabled={!currentApp}
-                className="border-edge bg-background hover:bg-muted font-mono uppercase text-xs"
+                className="border-edge bg-background hover:bg-muted font-mono uppercase text-xs gap-1.5"
               >
-                Export
+                <Download className="size-3.5" />
+                <span>Export .zip</span>
               </Button>
 
               <Button
                 type="button"
+                variant="secondary"
                 size="sm"
-                onClick={() => currentApp && onPublish(currentApp)}
+                onClick={() => setPublishToastOpen(true)}
                 disabled={!currentApp}
-                className="font-mono uppercase text-xs"
+                title="Publish coming soon"
+                className="border border-edge font-mono uppercase text-xs"
               >
-                Publish
+                Publish · Soon
               </Button>
             </div>
           </div>
@@ -642,7 +826,7 @@ export function WorkspaceView({
                   <img
                     src="/assets/emdash-logo.png"
                     alt="Emdash"
-                    className="size-8 object-cover mb-2"
+                    className="size-6 object-cover mb-1.5"
                   />
                   <span className="font-medium text-foreground text-sm">
                     Nothing here yet
@@ -662,45 +846,127 @@ export function WorkspaceView({
                 {isGenerating && (
                   <div className="absolute inset-x-0 top-0 h-0.5 bg-primary animate-pulse z-10" />
                 )}
-                <iframe
-                  key={`${currentApp.version}-${reloadNonce}`}
-                  title={currentApp.title}
-                  srcDoc={currentApp.html}
-                  sandbox="allow-scripts allow-forms allow-modals"
-                  className="w-full h-full border-0 bg-white block"
-                />
+                {currentApp.brief.mode === "react-ts" && sandpackFiles ? (
+                  <div className="w-full h-full [&_.sp-wrapper]:h-full [&_.sp-layout]:h-full [&_.sp-layout]:border-0 [&_.sp-layout]:rounded-none [&_.sp-preview-container]:h-full [&_.sp-preview-iframe]:h-full">
+                    <SandpackProvider
+                      key={`${currentApp.version}-${reloadNonce}`}
+                      template="react-ts"
+                      theme={isDark ? "dark" : "light"}
+                      files={sandpackFiles}
+                      options={{
+                        externalResources: ["https://cdn.tailwindcss.com"],
+                      }}
+                    >
+                      <SandpackErrorBridge
+                        version={currentApp}
+                        onError={onRuntimeError}
+                      />
+                      <SandpackLayout>
+                        <SandpackPreview
+                          showOpenInCodeSandbox={false}
+                          showRefreshButton={false}
+                        />
+                      </SandpackLayout>
+                    </SandpackProvider>
+                  </div>
+                ) : (
+                  <iframe
+                    key={`${currentApp.version}-${reloadNonce}`}
+                    title={currentApp.title}
+                    srcDoc={staticSrcDoc}
+                    sandbox="allow-scripts"
+                    className="w-full h-full border-0 bg-white block"
+                  />
+                )}
               </div>
             ) : (
-              <div className="w-full h-full relative bg-card overflow-auto">
-                <div className="sticky top-3 float-right mr-4 z-10">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleCopyCode}
-                    className="bg-background border-edge font-mono uppercase text-xs"
-                  >
-                    {copiedCode ? (
-                      <>
-                        <Check className="size-3.5 text-primary" />
-                        <span>Copied</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="size-3.5" />
-                        <span>Copy code</span>
-                      </>
-                    )}
-                  </Button>
+              <div className="w-full h-full flex flex-col sm:flex-row bg-card overflow-hidden">
+                {/* File Tree Sidebar */}
+                <div className="w-full sm:w-56 shrink-0 border-b sm:border-b-0 sm:border-r border-edge bg-background overflow-auto max-h-40 sm:max-h-none">
+                  <div className="px-3 py-2 border-b border-edge flex items-center gap-1.5 font-mono uppercase text-[10px] text-muted-foreground">
+                    <FolderOpen className="size-3.5 text-primary shrink-0" />
+                    <span>Project files ({fileList.length})</span>
+                  </div>
+                  <div className="p-1 flex sm:flex-col gap-0.5 overflow-x-auto sm:overflow-x-visible">
+                    {fileList.map((filePath) => (
+                      <button
+                        key={filePath}
+                        type="button"
+                        onClick={() => setSelectedFilePath(filePath)}
+                        className={cn(
+                          "flex items-center gap-1.5 px-2.5 py-1.5 text-left text-xs font-mono transition-colors whitespace-nowrap sm:whitespace-normal break-all cursor-pointer",
+                          selectedFilePath === filePath
+                            ? "bg-card text-primary border border-edge"
+                            : "text-muted-foreground hover:text-foreground border border-transparent"
+                        )}
+                      >
+                        <FileCode2 className="size-3.5 shrink-0" />
+                        <span>{filePath}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <pre className="p-4 text-xs leading-relaxed font-mono text-foreground whitespace-pre-wrap break-words">
-                  {currentApp.html}
-                </pre>
+
+                {/* Read-Only Code Viewer */}
+                <div className="flex-1 min-w-0 min-h-0 flex flex-col bg-card overflow-hidden">
+                  <div className="flex items-center justify-between gap-2 px-4 py-2 border-b border-edge bg-background shrink-0">
+                    <span className="font-mono text-xs text-foreground truncate">
+                      {selectedFilePath}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCopyCode}
+                      className="h-7 bg-card border-edge font-mono uppercase text-[11px] shrink-0"
+                    >
+                      {copiedCode ? (
+                        <>
+                          <Check className="size-3 text-primary" />
+                          <span>Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="size-3" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <div className="flex-1 overflow-auto">
+                    <pre className="p-4 text-xs leading-relaxed font-mono text-foreground whitespace-pre-wrap break-words">
+                      <code>{currentApp.files[selectedFilePath] ?? ""}</code>
+                    </pre>
+                  </div>
+                </div>
               </div>
             )}
           </div>
         </section>
       </div>
+
+      {publishToastOpen && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-4 right-4 z-50 flex items-center gap-3 border border-edge bg-card px-3.5 py-2.5 text-xs shadow-lg max-w-sm"
+        >
+          <span className="font-mono uppercase text-[10px] font-semibold border border-edge px-1.5 py-0.5 text-primary bg-background shrink-0">
+            Coming soon
+          </span>
+          <span className="text-foreground">
+            Publish is coming soon. Use Export .zip to download all project files.
+          </span>
+          <button
+            type="button"
+            onClick={() => setPublishToastOpen(false)}
+            aria-label="Dismiss notice"
+            className="text-muted-foreground hover:text-foreground cursor-pointer shrink-0"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,46 +1,38 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import JSZip from "jszip";
 import { Navbar } from "@/src/components/Navbar";
 import { HomeView } from "@/src/components/HomeView";
 import { WorkspaceView } from "@/src/components/WorkspaceView";
 import { Footer, type DocSection } from "@/src/components/Footer";
 import {
-  AdRewardDialog,
   AuthDialog,
+  ModelsDialog,
   PricingDialog,
-  PublishDialog,
   SponsorSlotDialog,
   SupportDocsDialog,
   TemplatesDialog,
 } from "@/src/components/Dialogs";
+import {
+  FALLBACK_GEMINI_MODEL,
+  GeminiError,
+  runPipelineViaServer,
+} from "@/src/lib/gemini";
+import {
+  clearVersionsFromDb,
+  loadSelectedModel,
+  loadVersionsFromDb,
+  saveSelectedModel,
+  saveVersionToDb,
+} from "@/src/lib/storage";
 import type {
   AppVersion,
   AttachedFile,
   ChatAttachmentMeta,
   ChatMessage,
+  PipelineStage,
   UserSession,
 } from "@/src/types";
 import type { TemplateItem } from "@/src/data/templates";
-
-const TOTAL_QUOTA_SECONDS = 18000; // 5 hours daily free limit
-const BUILD_COST_SECONDS = 360; // 6 minutes per build
-
-function getTodayKey(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function loadInitialUsedSeconds(): number {
-  try {
-    const raw = localStorage.getItem("emdash_quota");
-    if (!raw) return 0;
-    const parsed = JSON.parse(raw) as { date?: string; used?: number };
-    if (parsed.date === getTodayKey() && typeof parsed.used === "number") {
-      return Math.max(0, Math.min(TOTAL_QUOTA_SECONDS, parsed.used));
-    }
-  } catch {
-    // ignore storage errors
-  }
-  return 0;
-}
 
 function loadInitialUser(): UserSession | null {
   try {
@@ -50,6 +42,41 @@ function loadInitialUser(): UserSession | null {
   } catch {
     return null;
   }
+}
+
+function slugifyTitle(title: string): string {
+  return (
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40) || "emdash-app"
+  );
+}
+
+function formatFriendlyPipelineError(err: unknown): string {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Check your internet connection and try again.";
+  }
+  if (err instanceof GeminiError) {
+    if (err.code === "MISSING_KEY" || err.code === "INVALID_KEY") {
+      return "The server's Gemini API key is missing or invalid. Check Settings > Secrets.";
+    }
+    if (err.code === "RATE_LIMIT") {
+      return "Gemini API rate limit reached (429). Please wait a moment and try again.";
+    }
+    if (err.code === "MALFORMED") {
+      return "The model returned malformed output after retrying. Try simplifying your prompt or switching models.";
+    }
+    if (err.code === "TIMEOUT") {
+      return "Generation timed out. Please try again.";
+    }
+    if (err.code === "NETWORK") {
+      return "Network error reaching the Emdash server. Check your connection and try again.";
+    }
+    return err.message;
+  }
+  return err instanceof Error ? err.message : "Failed to build application.";
 }
 
 export default function App() {
@@ -64,7 +91,6 @@ export default function App() {
     }
   });
 
-  const [usedSeconds, setUsedSeconds] = useState<number>(loadInitialUsedSeconds);
   const [user, setUser] = useState<UserSession | null>(loadInitialUser);
   const [planOverride, setPlanOverride] = useState<"free" | "pro">(() => {
     try {
@@ -74,6 +100,10 @@ export default function App() {
     }
   });
 
+  const [selectedModel, setSelectedModel] = useState<string>(() =>
+    loadSelectedModel(FALLBACK_GEMINI_MODEL)
+  );
+
   const [mode, setMode] = useState<"home" | "workspace">("home");
   const [homePrompt, setHomePrompt] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -82,21 +112,17 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState(false);
 
   // Dialog states
-  const [adDialogOpen, setAdDialogOpen] = useState(false);
+  const [modelsOpen, setModelsOpen] = useState(false);
   const [pricingOpen, setPricingOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
-  const [publishState, setPublishState] = useState<{
-    open: boolean;
-    version: AppVersion | null;
-    path: string | null;
-  }>({ open: false, version: null, path: null });
   const [docsOpen, setDocsOpen] = useState(false);
   const [docsSection, setDocsSection] = useState<DocSection>("quickstart");
   const [sponsorOpen, setSponsorOpen] = useState(false);
 
+  const autoRepairedVersionsRef = useRef<Set<number>>(new Set());
+
   const isPro = (user?.plan ?? planOverride) === "pro";
-  const quotaRemainingSeconds = Math.max(0, TOTAL_QUOTA_SECONDS - usedSeconds);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDark);
@@ -108,15 +134,19 @@ export default function App() {
   }, [isDark]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(
-        "emdash_quota",
-        JSON.stringify({ date: getTodayKey(), used: usedSeconds })
-      );
-    } catch {
-      // ignore
-    }
-  }, [usedSeconds]);
+    let active = true;
+    void (async () => {
+      const storedVersions = await loadVersionsFromDb();
+      if (!active) return;
+      if (storedVersions.length > 0) {
+        setVersions(storedVersions);
+        setSelectedVersion(storedVersions[storedVersions.length - 1].version);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleSelectPlan = useCallback((plan: "free" | "pro") => {
     setPlanOverride(plan);
@@ -159,22 +189,35 @@ export default function App() {
     }
   }, []);
 
-  const runBuild = useCallback(
-    async (
-      promptText: string,
-      attachments: AttachedFile[],
-      existingVersions: AppVersion[],
-      existingMessages: ChatMessage[]
-    ) => {
+  const executePipelineRun = useCallback(
+    async ({
+      modelToUse,
+      promptText,
+      attachments,
+      existingVersions,
+      runtimeErrors,
+      isFreshBuild,
+    }: {
+      modelToUse: string;
+      promptText: string;
+      attachments: AttachedFile[];
+      existingVersions: AppVersion[];
+      runtimeErrors?: string[];
+      isFreshBuild: boolean;
+    }) => {
       if (isGenerating) return;
-      if (!isPro && quotaRemainingSeconds <= 0) {
-        setAdDialogOpen(true);
-        return;
-      }
 
       setMode("workspace");
       setIsGenerating(true);
 
+      if (isFreshBuild) {
+        autoRepairedVersionsRef.current.clear();
+        await clearVersionsFromDb();
+        setVersions([]);
+        setMessages([]);
+      }
+
+      const startedAt = Date.now();
       const userMsgId = `u-${Date.now()}`;
       const assistantMsgId = `a-${Date.now() + 1}`;
 
@@ -189,7 +232,9 @@ export default function App() {
       const userMsg: ChatMessage = {
         id: userMsgId,
         role: "user",
-        content: promptText,
+        content: runtimeErrors?.length
+          ? `Fixing runtime error: ${runtimeErrors[0]}`
+          : promptText,
         attachments: chatAttachments.length > 0 ? chatAttachments : undefined,
       };
 
@@ -198,61 +243,60 @@ export default function App() {
         role: "assistant",
         content: "",
         status: "thinking",
+        stage: runtimeErrors?.length ? "repair" : "brief",
       };
 
-      setMessages((prev) => [...prev, userMsg, thinkingMsg]);
+      setMessages((prev) =>
+        isFreshBuild ? [userMsg, thinkingMsg] : [...prev, userMsg, thinkingMsg]
+      );
 
       const currentApp = existingVersions[existingVersions.length - 1] ?? null;
-      const historyPayload = existingMessages
-        .filter((m) => m.status !== "error" && m.content)
-        .map((m) => ({ role: m.role, content: m.content }));
-
-      const attachmentPayload = attachments.map((file) => ({
-        name: file.name,
-        mimeType: file.mimeType,
-        size: file.size,
-        kind: file.kind,
-        content: file.content,
-        base64Data: file.base64Data,
-      }));
 
       try {
-        const res = await fetch("/api/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            prompt: promptText,
-            currentHtml: currentApp?.html,
-            history: historyPayload,
-            attachments: attachmentPayload,
-          }),
-        });
-
-        const data = (await res.json()) as {
-          title?: string;
-          slug?: string;
-          summary?: string;
-          html?: string;
-          elapsedSeconds?: number;
-          error?: string;
-        };
-
-        if (!res.ok || !data.html) {
-          throw new Error(data.error || "Failed to generate application.");
-        }
+        const result = await runPipelineViaServer(
+          promptText,
+          {
+            model: modelToUse,
+            brief: currentApp?.brief,
+            files: currentApp?.files,
+            runtimeErrors,
+            attachments,
+          },
+          (stage: PipelineStage) => {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMsgId ? { ...m, stage } : m
+              )
+            );
+          }
+        );
 
         const nextVersionNumber = existingVersions.length + 1;
         const newVersion: AppVersion = {
           version: nextVersionNumber,
-          title: data.title || "Untitled App",
-          slug: data.slug || "untitled",
-          html: data.html,
+          title: result.brief.appName || "Untitled App",
+          slug: slugifyTitle(result.brief.appName || "emdash-app"),
           prompt: promptText,
+          brief: result.brief,
+          plan: result.plan,
+          files: result.files,
           createdAt: new Date().toISOString(),
         };
 
-        setVersions((prev) => [...prev, newVersion]);
+        await saveVersionToDb(newVersion);
+        const persistedVersions = await loadVersionsFromDb();
+        const finalVersions =
+          persistedVersions.length > 0
+            ? persistedVersions
+            : [...existingVersions, newVersion];
+
+        setVersions(finalVersions);
         setSelectedVersion(nextVersionNumber);
+
+        const elapsedSeconds = Math.max(
+          1,
+          Math.round((Date.now() - startedAt) / 1000)
+        );
 
         setMessages((prev) =>
           prev.map((m) =>
@@ -260,35 +304,24 @@ export default function App() {
               ? {
                   ...m,
                   status: "done",
-                  elapsedSeconds: data.elapsedSeconds ?? 2,
+                  elapsedSeconds,
                   content:
-                    data.summary ||
-                    "Built your application and saved it as a new version.",
+                    result.summary ||
+                    "Built your application and saved a new version.",
                   version: nextVersionNumber,
                 }
               : m
           )
         );
-
-        if (!isPro) {
-          setUsedSeconds((prev) => {
-            const next = Math.min(TOTAL_QUOTA_SECONDS, prev + BUILD_COST_SECONDS);
-            if (TOTAL_QUOTA_SECONDS - next <= 0) {
-              window.setTimeout(() => setAdDialogOpen(true), 400);
-            }
-            return next;
-          });
-        }
       } catch (err: unknown) {
-        const errMessage =
-          err instanceof Error ? err.message : "Failed to build application.";
+        const friendly = formatFriendlyPipelineError(err);
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
               ? {
                   ...m,
                   status: "error",
-                  content: errMessage,
+                  content: friendly,
                 }
               : m
           )
@@ -297,33 +330,64 @@ export default function App() {
         setIsGenerating(false);
       }
     },
-    [isGenerating, isPro, quotaRemainingSeconds]
+    [isGenerating]
   );
 
-  const handleStartFromHome = (
-    promptText: string,
-    attachments: AttachedFile[]
-  ) => {
-    setHomePrompt("");
-    setMessages([]);
-    setVersions([]);
-    setSelectedVersion(1);
-    void runBuild(promptText, attachments, [], []);
-  };
+  const handleStartFromHome = useCallback(
+    async (promptText: string, attachments: AttachedFile[]) => {
+      setHomePrompt("");
+      setSelectedVersion(1);
+      await executePipelineRun({
+        modelToUse: selectedModel,
+        promptText,
+        attachments,
+        existingVersions: [],
+        isFreshBuild: true,
+      });
+    },
+    [executePipelineRun, selectedModel]
+  );
 
-  const handleFollowUp = (
-    promptText: string,
-    attachments: AttachedFile[]
-  ) => {
-    void runBuild(promptText, attachments, versions, messages);
-  };
+  const handleFollowUp = useCallback(
+    async (promptText: string, attachments: AttachedFile[]) => {
+      await executePipelineRun({
+        modelToUse: selectedModel,
+        promptText,
+        attachments,
+        existingVersions: versions,
+        isFreshBuild: false,
+      });
+    },
+    [executePipelineRun, selectedModel, versions]
+  );
+
+  const handleRuntimeError = useCallback(
+    async (erroredVersion: AppVersion, errors: string[]) => {
+      if (isGenerating || errors.length === 0) return;
+      if (autoRepairedVersionsRef.current.has(erroredVersion.version)) return;
+
+      autoRepairedVersionsRef.current.add(erroredVersion.version);
+      await executePipelineRun({
+        modelToUse: selectedModel,
+        promptText: `Fix runtime errors in v${erroredVersion.version}`,
+        attachments: [],
+        existingVersions: versions,
+        runtimeErrors: errors,
+        isFreshBuild: false,
+      });
+    },
+    [executePipelineRun, isGenerating, selectedModel, versions]
+  );
+
+  const handleSaveModel = useCallback((newModel: string) => {
+    saveSelectedModel(newModel);
+    setSelectedModel(newModel);
+  }, []);
 
   const handleGoHome = () => {
     if (isGenerating) return;
     setMode("home");
     setMessages([]);
-    setVersions([]);
-    setSelectedVersion(1);
   };
 
   const handleOpenTemplates = () => {
@@ -338,43 +402,23 @@ export default function App() {
 
   const handlePickTemplateFromModal = (tpl: TemplateItem) => {
     if (isGenerating) return;
-    setMessages([]);
-    setVersions([]);
-    setSelectedVersion(1);
-    void runBuild(tpl.prompt, [], [], []);
+    void handleStartFromHome(tpl.prompt, []);
   };
 
-  const handleExport = (version: AppVersion) => {
-    const blob = new Blob([version.html], { type: "text/html;charset=utf-8" });
+  const handleExportZip = async (version: AppVersion) => {
+    const zip = new JSZip();
+    for (const [filePath, content] of Object.entries(version.files)) {
+      zip.file(filePath, content);
+    }
+    const blob = await zip.generateAsync({ type: "blob" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${version.slug}-v${version.version}.html`;
+    link.download = `${version.slug}-v${version.version}.zip`;
     document.body.appendChild(link);
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-  };
-
-  const handlePublish = async (version: AppVersion) => {
-    try {
-      const res = await fetch("/api/publish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          slug: version.slug,
-          title: version.title,
-          html: version.html,
-        }),
-      });
-      const data = (await res.json()) as { path?: string; error?: string };
-      if (!res.ok || !data.path) {
-        throw new Error(data.error || "Failed to publish site");
-      }
-      setPublishState({ open: true, version, path: data.path });
-    } catch {
-      // ignore failed publish when server rejects
-    }
   };
 
   return (
@@ -392,6 +436,7 @@ export default function App() {
         onGoHome={handleGoHome}
         onOpenTemplates={handleOpenTemplates}
         onOpenPricing={() => setPricingOpen(true)}
+        onOpenModels={() => setModelsOpen(true)}
         onOpenAuth={() => setAuthOpen(true)}
         user={user}
       />
@@ -401,9 +446,10 @@ export default function App() {
           <HomeView
             prompt={homePrompt}
             onPromptChange={setHomePrompt}
-            onSubmitPrompt={handleStartFromHome}
+            onSubmitPrompt={(p, files) => void handleStartFromHome(p, files)}
             isPro={isPro}
             onOpenPricing={() => setPricingOpen(true)}
+            onOpenModels={() => setModelsOpen(true)}
           />
           <Footer
             onGoHome={handleGoHome}
@@ -424,22 +470,21 @@ export default function App() {
           onSelectVersion={setSelectedVersion}
           isGenerating={isGenerating}
           isPro={isPro}
-          quotaRemainingSeconds={quotaRemainingSeconds}
-          quotaTotalSeconds={TOTAL_QUOTA_SECONDS}
-          onOpenQuota={() => setAdDialogOpen(true)}
+          isDark={isDark}
+          selectedModel={selectedModel}
+          onOpenModels={() => setModelsOpen(true)}
           onOpenPricing={() => setPricingOpen(true)}
-          onSendFollowUp={handleFollowUp}
-          onExport={handleExport}
-          onPublish={handlePublish}
+          onSendFollowUp={(p, files) => void handleFollowUp(p, files)}
+          onRuntimeError={(ver, errs) => void handleRuntimeError(ver, errs)}
+          onExport={(ver) => void handleExportZip(ver)}
         />
       )}
 
-      <AdRewardDialog
-        open={adDialogOpen}
-        onOpenChange={setAdDialogOpen}
-        onRewardClaimed={(seconds) =>
-          setUsedSeconds((prev) => Math.max(0, prev - seconds))
-        }
+      <ModelsDialog
+        open={modelsOpen}
+        onOpenChange={setModelsOpen}
+        initialModel={selectedModel}
+        onSaveModel={handleSaveModel}
       />
 
       <PricingDialog
@@ -453,14 +498,6 @@ export default function App() {
         open={templatesOpen}
         onOpenChange={setTemplatesOpen}
         onPickTemplate={handlePickTemplateFromModal}
-      />
-
-      <PublishDialog
-        open={publishState.open}
-        onOpenChange={(open) => setPublishState((prev) => ({ ...prev, open }))}
-        version={publishState.version}
-        publishedPath={publishState.path}
-        onExport={handleExport}
       />
 
       <AuthDialog

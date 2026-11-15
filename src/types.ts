@@ -2,13 +2,64 @@ export type ThemeMode = "light" | "dark" | "system";
 export type WorkspaceTab = "preview" | "code";
 export type DeviceViewport = "desktop" | "tablet" | "mobile";
 
+export type PipelineMode = "static" | "react-ts";
+export type PipelineStage = "brief" | "plan" | "build" | "check" | "repair";
+
+export interface DesignBrief {
+  appName: string;
+  appType: string;
+  audience: string;
+  tone: string;
+  layout: string;
+  notes: string;
+  mode: PipelineMode;
+  dark: boolean;
+  palette: {
+    primary: string;
+    secondary: string;
+    accent: string;
+    background: string;
+    surface: string;
+    text: string;
+    muted: string;
+  };
+  fonts: {
+    heading: string;
+    body: string;
+  };
+  sections: string[];
+  features: string[];
+}
+
+export interface PlanFileSpec {
+  path: string;
+  purpose: string;
+}
+
+export interface BuildPlan {
+  files: PlanFileSpec[];
+  components: string[];
+  state: string[];
+  interactions: string[];
+}
+
+export type GeneratedFiles = Record<string, string>;
+
 export interface AppVersion {
   version: number;
   title: string;
   slug: string;
-  html: string;
   prompt: string;
+  brief: DesignBrief;
+  plan: BuildPlan;
+  files: GeneratedFiles;
   createdAt: string;
+}
+
+export interface GeminiModelOption {
+  id: string;
+  displayName: string;
+  description?: string;
 }
 
 export interface AttachedFile {
@@ -38,6 +89,7 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   status?: "thinking" | "done" | "error";
+  stage?: PipelineStage;
   elapsedSeconds?: number;
   version?: number;
   attachmentName?: string;

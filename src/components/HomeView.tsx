@@ -23,6 +23,7 @@ interface HomeViewProps {
   onSubmitPrompt: (promptText: string, attachments: AttachedFile[]) => void;
   isPro: boolean;
   onOpenPricing: () => void;
+  onOpenModels: () => void;
 }
 
 const TEMPLATE_TAGS: Record<string, string> = {
@@ -39,6 +40,7 @@ export function HomeView({
   onSubmitPrompt,
   isPro,
   onOpenPricing,
+  onOpenModels,
 }: HomeViewProps) {
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [attachments, setAttachments] = useState<AttachedFile[]>([]);
@@ -145,8 +147,8 @@ export function HomeView({
             </span>
             <span>
               {isPro
-                ? "Unlimited build time · Ad-free"
-                : "5 hours daily · Supported by ads"}
+                ? "Unlimited · Ad-free"
+                : "& Supported by ads"}
             </span>
           </button>
 
@@ -276,7 +278,7 @@ export function HomeView({
 
               <button
                 type="button"
-                onClick={onOpenPricing}
+                onClick={onOpenModels}
                 className="inline-flex items-center h-9 px-3 border border-edge bg-background font-mono uppercase text-xs text-muted-foreground hover:text-foreground hover:border-neutral transition-colors cursor-pointer"
               >
                 {isPro ? "Emdash Pro" : "Emdash Free"}
@@ -353,7 +355,7 @@ export function HomeView({
                 Start from a template
               </h2>
               <p className="text-sm text-muted-foreground mt-1">
-                Pick one and make it yours. Free for 5 hours a day.
+                Pick one and make it yours. Free to start · Supported by ads.
               </p>
             </div>
             <span className="font-mono uppercase text-xs text-muted-foreground">
@@ -451,7 +453,7 @@ export function HomeView({
                     Ad-free workspace
                   </div>
                   <div className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                    Unlimited daily build hours enabled across all prompts and templates.
+                    Ad-free workspace enabled across all prompts and templates.
                   </div>
                 </div>
                 <span className="font-mono uppercase text-[11px] text-primary mt-4">

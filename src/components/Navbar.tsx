@@ -12,6 +12,7 @@ interface NavbarProps {
   onGoHome: () => void;
   onOpenTemplates: () => void;
   onOpenPricing: () => void;
+  onOpenModels: () => void;
   onOpenAuth: () => void;
   user: UserSession | null;
 }
@@ -23,6 +24,7 @@ export function Navbar({
   onGoHome,
   onOpenTemplates,
   onOpenPricing,
+  onOpenModels,
   onOpenAuth,
   user,
 }: NavbarProps) {
@@ -62,12 +64,12 @@ export function Navbar({
             type="button"
             onClick={() => handleNavAction(onGoHome)}
             aria-label="Emdash home"
-            className="flex items-center gap-2 sm:gap-2.5 font-semibold text-sm sm:text-base tracking-tight px-1 py-1 hover:opacity-85 transition-opacity focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring whitespace-nowrap shrink-0 cursor-pointer"
+            className="flex items-center gap-1 sm:gap-1.5 font-semibold text-sm sm:text-base tracking-tight px-1 py-1 hover:opacity-85 transition-opacity focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring whitespace-nowrap shrink-0 cursor-pointer"
           >
             <img
               src="/assets/emdash-logo.png"
               alt=""
-              className="size-5 sm:size-6 object-cover shrink-0"
+              className="size-4 sm:size-5 object-cover shrink-0"
             />
             <span>Emdash</span>
           </button>
@@ -210,6 +212,16 @@ export function Navbar({
               className="group flex items-center justify-between px-4 py-3 text-left text-sm font-sans text-foreground transition-colors hover:bg-muted/60 hover:text-primary cursor-pointer"
             >
               <span>Pricing</span>
+              <span className="size-6 border border-edge bg-background grid place-items-center text-muted-foreground transition-colors group-hover:border-primary group-hover:text-primary">
+                <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleNavAction(onOpenModels)}
+              className="group flex items-center justify-between px-4 py-3 text-left text-sm font-sans text-foreground transition-colors hover:bg-muted/60 hover:text-primary cursor-pointer"
+            >
+              <span>Models</span>
               <span className="size-6 border border-edge bg-background grid place-items-center text-muted-foreground transition-colors group-hover:border-primary group-hover:text-primary">
                 <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
               </span>
