@@ -14,6 +14,7 @@ import {
 import type {
   AppVersion,
   AttachedFile,
+  ChatAttachmentMeta,
   ChatMessage,
   UserSession,
 } from "@/src/types";
@@ -157,7 +158,7 @@ export default function App() {
   const runBuild = useCallback(
     async (
       promptText: string,
-      attachment: AttachedFile | null,
+      attachments: AttachedFile[],
       existingVersions: AppVersion[],
       existingMessages: ChatMessage[]
     ) => {
@@ -173,11 +174,19 @@ export default function App() {
       const userMsgId = `u-${Date.now()}`;
       const assistantMsgId = `a-${Date.now() + 1}`;
 
+      const chatAttachments: ChatAttachmentMeta[] = attachments.map((file) => ({
+        name: file.name,
+        mimeType: file.mimeType,
+        size: file.size,
+        kind: file.kind,
+        previewUrl: file.previewUrl,
+      }));
+
       const userMsg: ChatMessage = {
         id: userMsgId,
         role: "user",
         content: promptText,
-        attachmentName: attachment?.name,
+        attachments: chatAttachments.length > 0 ? chatAttachments : undefined,
       };
 
       const thinkingMsg: ChatMessage = {
@@ -194,6 +203,15 @@ export default function App() {
         .filter((m) => m.status !== "error" && m.content)
         .map((m) => ({ role: m.role, content: m.content }));
 
+      const attachmentPayload = attachments.map((file) => ({
+        name: file.name,
+        mimeType: file.mimeType,
+        size: file.size,
+        kind: file.kind,
+        content: file.content,
+        base64Data: file.base64Data,
+      }));
+
       try {
         const res = await fetch("/api/generate", {
           method: "POST",
@@ -202,7 +220,7 @@ export default function App() {
             prompt: promptText,
             currentHtml: currentApp?.html,
             history: historyPayload,
-            attachment,
+            attachments: attachmentPayload,
           }),
         });
 
@@ -281,17 +299,20 @@ export default function App() {
 
   const handleStartFromHome = (
     promptText: string,
-    attachment: AttachedFile | null
+    attachments: AttachedFile[]
   ) => {
     setHomePrompt("");
     setMessages([]);
     setVersions([]);
     setSelectedVersion(1);
-    void runBuild(promptText, attachment, [], []);
+    void runBuild(promptText, attachments, [], []);
   };
 
-  const handleFollowUp = (promptText: string) => {
-    void runBuild(promptText, null, versions, messages);
+  const handleFollowUp = (
+    promptText: string,
+    attachments: AttachedFile[]
+  ) => {
+    void runBuild(promptText, attachments, versions, messages);
   };
 
   const handleGoHome = () => {
@@ -320,7 +341,7 @@ export default function App() {
     setMessages([]);
     setVersions([]);
     setSelectedVersion(1);
-    void runBuild(tpl.prompt, null, [], []);
+    void runBuild(tpl.prompt, [], [], []);
   };
 
   const handleExport = (version: AppVersion) => {
@@ -363,14 +384,11 @@ export default function App() {
     <div className="h-full flex flex-col bg-background text-foreground">
       <Navbar
         mode={mode}
-        quotaRemainingSeconds={quotaRemainingSeconds}
-        quotaTotalSeconds={TOTAL_QUOTA_SECONDS}
         isDark={isDark}
         onToggleTheme={() => setIsDark((d) => !d)}
         onGoHome={handleGoHome}
         onOpenTemplates={handleOpenTemplates}
         onOpenPricing={() => setPricingOpen(true)}
-        onOpenQuota={() => setAdDialogOpen(true)}
         onOpenAuth={() => setAuthOpen(true)}
         user={user}
       />
@@ -391,6 +409,10 @@ export default function App() {
           onSelectVersion={setSelectedVersion}
           isGenerating={isGenerating}
           isPro={isPro}
+          quotaRemainingSeconds={quotaRemainingSeconds}
+          quotaTotalSeconds={TOTAL_QUOTA_SECONDS}
+          onOpenQuota={() => setAdDialogOpen(true)}
+          onOpenPricing={() => setPricingOpen(true)}
           onSendFollowUp={handleFollowUp}
           onExport={handleExport}
           onPublish={handlePublish}

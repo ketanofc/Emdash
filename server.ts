@@ -16,14 +16,21 @@ interface HistoryTurn {
   content: string;
 }
 
+interface IncomingAttachment {
+  name?: string;
+  mimeType?: string;
+  size?: number;
+  kind?: "image" | "inline" | "text" | "binary";
+  content?: string;
+  base64Data?: string;
+}
+
 interface GenerateRequestBody {
   prompt?: string;
   currentHtml?: string;
   history?: HistoryTurn[];
-  attachment?: {
-    name: string;
-    content: string;
-  } | null;
+  attachment?: IncomingAttachment | null;
+  attachments?: IncomingAttachment[];
 }
 
 interface PublishedSite {
@@ -66,12 +73,13 @@ Rules for the generated \`html\`:
 3. Every button, form, filter, tab, toggle, or interactive element in the generated app MUST actually work with clean vanilla JavaScript (including localStorage persistence where helpful like todos or habit trackers).
 4. Do not use external image URLs that might fail to load (use crisp inline SVGs, CSS gradients, or canvas graphics instead).
 5. When modifying an existing app (\`currentHtml\` is provided), preserve the existing features and data structure while faithfully applying the user's requested changes (e.g., dark mode, new color accents, new sections, layout refinements).
-6. Keep \`summary\` concise, human, and direct (1–2 sentences describing what was built or updated).
-7. Keep \`title\` short (2–5 words) and \`slug\` URL-friendly lowercase kebab-case.`;
+6. When reference images, screenshots, UI mockups, or wireframes are attached, carefully analyze their layout, color palette, typography, spacing, and components, and reflect that visual reference in the generated app. When text, JSON, CSV, HTML, SVG, or code files are attached, incorporate their contents or structure directly as requested.
+7. Keep \`summary\` concise, human, and direct (1–2 sentences describing what was built or updated).
+8. Keep \`title\` short (2–5 words) and \`slug\` URL-friendly lowercase kebab-case.`;
 
 async function startServer() {
   const app = express();
-  app.use(express.json({ limit: "2mb" }));
+  app.use(express.json({ limit: "20mb" }));
 
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true });
@@ -95,10 +103,14 @@ async function startServer() {
       return;
     }
 
-    const parts: string[] = [];
+    type ContentPart =
+      | { text: string }
+      | { inlineData: { mimeType: string; data: string } };
+
+    const textSections: string[] = [];
     if (body.history && Array.isArray(body.history) && body.history.length > 0) {
       const recent = body.history.slice(-6);
-      parts.push(
+      textSections.push(
         "Conversation history:\n" +
           recent
             .map((turn) => `${turn.role === "user" ? "User" : "Emdash"}: ${turn.content}`)
@@ -107,24 +119,62 @@ async function startServer() {
     }
 
     if (body.currentHtml && typeof body.currentHtml === "string") {
-      parts.push(
+      textSections.push(
         `Current index.html to modify:\n\`\`\`html\n${body.currentHtml.slice(0, 45000)}\n\`\`\``
       );
     }
 
-    if (body.attachment?.content) {
-      parts.push(
-        `Attached reference (${body.attachment.name}):\n\`\`\`\n${body.attachment.content.slice(0, 12000)}\n\`\`\``
-      );
+    const attachmentList: IncomingAttachment[] = [];
+    if (Array.isArray(body.attachments)) {
+      for (const item of body.attachments.slice(0, 4)) {
+        if (item && typeof item === "object") attachmentList.push(item);
+      }
+    } else if (body.attachment && typeof body.attachment === "object") {
+      attachmentList.push(body.attachment);
     }
 
-    parts.push(`User request: ${prompt}`);
+    const parts: ContentPart[] = [];
+    if (textSections.length > 0) {
+      parts.push({ text: textSections.join("\n\n") });
+    }
+
+    for (const file of attachmentList) {
+      const safeName = (file.name || "attachment").slice(0, 160);
+      const safeMime = (file.mimeType || "application/octet-stream").slice(0, 120);
+      if (
+        (file.kind === "image" || file.kind === "inline") &&
+        typeof file.base64Data === "string" &&
+        file.base64Data.length > 0
+      ) {
+        parts.push({
+          text: `Reference ${file.kind === "image" ? "image" : "file"} attached: ${safeName} (${safeMime})`,
+        });
+        parts.push({
+          inlineData: {
+            mimeType: safeMime,
+            data: file.base64Data,
+          },
+        });
+      } else if (typeof file.content === "string" && file.content.length > 0) {
+        parts.push({
+          text: `Attached reference file (${safeName}, ${safeMime}):\n\`\`\`\n${file.content.slice(0, 24000)}\n\`\`\``,
+        });
+      } else {
+        const sizeLabel =
+          typeof file.size === "number" ? `, ${file.size} bytes` : "";
+        parts.push({
+          text: `Attached file metadata: ${safeName} (${safeMime}${sizeLabel}). Treat this filename/type as a user-provided reference asset where relevant.`,
+        });
+      }
+    }
+
+    parts.push({ text: `User request: ${prompt}` });
 
     try {
       const startedAt = Date.now();
       const response = await ai.models.generateContent({
         model: "gemini-4-hydrogen",
-        contents: parts.join("\n\n"),
+        contents: { parts },
         config: {
           systemInstruction: SYSTEM_INSTRUCTION,
           thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },

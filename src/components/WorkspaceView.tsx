@@ -4,13 +4,17 @@ import {
   ArrowUp,
   Check,
   CheckCircle2,
+  Clock,
   Copy,
+  File as FileIcon,
   FileCode2,
   Loader2,
   Monitor,
+  Paperclip,
   RotateCw,
   Smartphone,
   Tablet,
+  X,
 } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Textarea } from "@/src/components/ui/textarea";
@@ -24,8 +28,15 @@ import {
 } from "@/src/components/ui/select";
 import { Skeleton } from "@/src/components/ui/skeleton";
 import { CornerBrackets } from "@/src/components/CornerBrackets";
+import {
+  MAX_ATTACHMENTS,
+  MAX_FILE_BYTES,
+  formatFileSize,
+  processUploadedFile,
+} from "@/src/lib/fileAttachment";
 import type {
   AppVersion,
+  AttachedFile,
   ChatMessage,
   DeviceViewport,
   WorkspaceTab,
@@ -40,9 +51,20 @@ interface WorkspaceViewProps {
   onSelectVersion: (version: number) => void;
   isGenerating: boolean;
   isPro: boolean;
-  onSendFollowUp: (prompt: string) => void;
+  quotaRemainingSeconds: number;
+  quotaTotalSeconds: number;
+  onOpenQuota: () => void;
+  onOpenPricing: () => void;
+  onSendFollowUp: (prompt: string, attachments: AttachedFile[]) => void;
   onExport: (version: AppVersion) => void;
   onPublish: (version: AppVersion) => void;
+}
+
+function formatQuota(secondsRemaining: number): string {
+  const clamped = Math.max(0, secondsRemaining);
+  const hours = Math.floor(clamped / 3600);
+  const mins = Math.floor((clamped % 3600) / 60);
+  return `${hours}h ${String(mins).padStart(2, "0")}m left`;
 }
 
 export function WorkspaceView({
@@ -52,17 +74,24 @@ export function WorkspaceView({
   onSelectVersion,
   isGenerating,
   isPro,
+  quotaRemainingSeconds,
+  quotaTotalSeconds,
+  onOpenQuota,
+  onOpenPricing,
   onSendFollowUp,
   onExport,
   onPublish,
 }: WorkspaceViewProps) {
   const [followUp, setFollowUp] = useState("");
+  const [attachments, setAttachments] = useState<AttachedFile[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("preview");
   const [device, setDevice] = useState<DeviceViewport>("desktop");
   const [reloadNonce, setReloadNonce] = useState(0);
   const [copiedCode, setCopiedCode] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -73,11 +102,60 @@ export function WorkspaceView({
     versions[versions.length - 1] ??
     null;
 
+  const addFiles = async (fileList: FileList | File[]) => {
+    const incoming = Array.from(fileList);
+    if (incoming.length === 0) return;
+
+    const remainingSlots = MAX_ATTACHMENTS - attachments.length;
+    if (remainingSlots <= 0) {
+      toast.error(`Maximum ${MAX_ATTACHMENTS} reference files per prompt`);
+      return;
+    }
+
+    const batch = incoming.slice(0, remainingSlots);
+    const processed: AttachedFile[] = [];
+    for (const file of batch) {
+      if (file.size > MAX_FILE_BYTES) {
+        toast.error(`${file.name} exceeds 4 MB limit`);
+        continue;
+      }
+      try {
+        processed.push(await processUploadedFile(file));
+      } catch {
+        toast.error(`Could not read ${file.name}`);
+      }
+    }
+
+    if (processed.length > 0) {
+      setAttachments((prev) => [...prev, ...processed]);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      void addFiles(e.target.files);
+    }
+    e.target.value = "";
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(e.clipboardData.files || []);
+    if (files.length > 0) {
+      e.preventDefault();
+      void addFiles(files);
+    }
+  };
+
   const handleSend = () => {
     const trimmed = followUp.trim();
-    if (!trimmed || isGenerating) return;
+    if ((!trimmed && attachments.length === 0) || isGenerating) return;
+    const filesToSend = attachments;
     setFollowUp("");
-    onSendFollowUp(trimmed);
+    setAttachments([]);
+    onSendFollowUp(
+      trimmed || "Update the app using the attached reference.",
+      filesToSend
+    );
   };
 
   const handleCopyCode = async () => {
@@ -99,11 +177,54 @@ export function WorkspaceView({
         ? "w-[768px] border-x border-edge"
         : "w-full";
 
+  const quotaPct = Math.max(
+    0,
+    Math.min(100, (quotaRemainingSeconds / quotaTotalSeconds) * 100)
+  );
+  const isQuotaLow = quotaRemainingSeconds < 1800;
+
   return (
     <div className="flex-1 min-h-0 px-2 pb-2 flex flex-col">
       <div className="flex-1 min-h-0 grid grid-cols-1 grid-rows-[minmax(260px,44%)_1fr] sm:grid-cols-[minmax(250px,310px)_1fr] md:grid-cols-[minmax(290px,350px)_1fr] lg:grid-cols-[minmax(320px,390px)_1fr] sm:grid-rows-[minmax(0,1fr)] border-x border-b border-edge bg-background">
         {/* Chat Pane */}
         <aside className="flex flex-col min-w-0 min-h-0 border-b sm:border-b-0 sm:border-r border-edge bg-background">
+          <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-edge bg-card shrink-0">
+            <span className="font-mono uppercase text-[11px] font-medium text-muted-foreground tracking-wider">
+              Build Chat
+            </span>
+            {isPro ? (
+              <button
+                type="button"
+                onClick={onOpenPricing}
+                className="inline-flex items-center gap-1.5 h-8 px-2.5 border border-edge bg-background font-mono uppercase text-xs text-foreground hover:border-primary transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <Clock className="size-3.5 text-primary" />
+                <span>Unlimited</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onOpenQuota}
+                aria-label="Daily build time"
+                className={cn(
+                  "inline-flex items-center gap-2 h-8 px-2.5 border bg-background font-mono uppercase text-xs transition-colors whitespace-nowrap shrink-0 cursor-pointer tabular-nums",
+                  isQuotaLow
+                    ? "border-primary text-primary hover:bg-primary/5"
+                    : "border-edge text-muted-foreground hover:text-foreground hover:border-neutral"
+                )}
+              >
+                <Clock className="size-3.5 text-primary shrink-0" />
+                <span>{formatQuota(quotaRemainingSeconds)}</span>
+                <span className="w-10 h-1 bg-muted overflow-hidden inline-block">
+                  <span
+                    className="block h-full bg-primary transition-all duration-300"
+                    style={{ width: `${quotaPct}%` }}
+                  />
+                </span>
+              </button>
+            )}
+          </div>
+
           <div className="flex-1 overflow-auto p-4 flex flex-col gap-3.5">
             {messages.map((msg) =>
               msg.role === "user" ? (
@@ -112,10 +233,34 @@ export function WorkspaceView({
                   className="self-end max-w-[88%] border border-edge bg-card px-3.5 py-2 text-[13.5px] leading-relaxed text-foreground"
                 >
                   <div>{msg.content}</div>
-                  {msg.attachmentName && (
-                    <div className="mt-1 font-mono uppercase text-[11px] text-primary">
-                      Attached: {msg.attachmentName}
+                  {msg.attachments && msg.attachments.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {msg.attachments.map((att, idx) => (
+                        <div
+                          key={`${att.name}-${idx}`}
+                          className="flex items-center gap-1.5 border border-edge bg-background px-1.5 py-1 text-[11px] max-w-full"
+                        >
+                          {att.previewUrl ? (
+                            <img
+                              src={att.previewUrl}
+                              alt={att.name}
+                              className="size-8 object-cover border border-edge shrink-0 bg-muted"
+                            />
+                          ) : (
+                            <FileIcon className="size-3.5 text-primary shrink-0" />
+                          )}
+                          <span className="font-mono truncate max-w-[160px] text-foreground">
+                            {att.name}
+                          </span>
+                        </div>
+                      ))}
                     </div>
+                  ) : (
+                    msg.attachmentName && (
+                      <div className="mt-1 font-mono uppercase text-[11px] text-primary">
+                        Attached: {msg.attachmentName}
+                      </div>
+                    )
                   )}
                 </div>
               ) : (
@@ -212,31 +357,111 @@ export function WorkspaceView({
               </div>
             )}
 
-            <div className="relative flex items-end gap-1.5 border border-edge bg-card p-2 focus-within:border-primary transition-colors">
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                  setIsDragging(false);
+                }
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                if (e.dataTransfer.files?.length) {
+                  void addFiles(e.dataTransfer.files);
+                }
+              }}
+              className={cn(
+                "relative flex flex-col gap-1.5 border bg-card p-2 focus-within:border-primary transition-colors",
+                isDragging ? "border-primary bg-primary/5" : "border-edge"
+              )}
+            >
               <CornerBrackets />
-              <Textarea
-                value={followUp}
-                onChange={(e) => setFollowUp(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend();
-                  }
-                }}
-                placeholder="Ask for a change…"
-                aria-label="Ask for a change"
-                rows={1}
-                className="min-h-[36px] max-h-[120px] resize-none border-0 px-2 py-1.5 text-[13.5px]"
-              />
-              <button
-                type="button"
-                onClick={handleSend}
-                disabled={!followUp.trim() || isGenerating}
-                aria-label="Send"
-                className="size-8 shrink-0 bg-primary text-primary-foreground grid place-items-center transition-all hover:bg-primary/85 active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
-              >
-                <ArrowUp className="size-4" />
-              </button>
+
+              {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 px-1 pt-0.5">
+                  {attachments.map((file) => (
+                    <div
+                      key={file.id}
+                      className="flex items-center gap-1.5 border border-edge bg-background px-1.5 py-1 text-xs max-w-[200px]"
+                    >
+                      {file.previewUrl ? (
+                        <img
+                          src={file.previewUrl}
+                          alt={file.name}
+                          className="size-5 object-cover border border-edge shrink-0 bg-muted"
+                        />
+                      ) : (
+                        <FileIcon className="size-3 text-primary shrink-0" />
+                      )}
+                      <span className="truncate font-mono text-[10px] text-foreground">
+                        {file.name}
+                      </span>
+                      <span className="font-mono text-[9px] text-muted-foreground shrink-0">
+                        {formatFileSize(file.size)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setAttachments((prev) =>
+                            prev.filter((item) => item.id !== file.id)
+                          )
+                        }
+                        aria-label={`Remove ${file.name}`}
+                        className="text-muted-foreground hover:text-foreground cursor-pointer shrink-0"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-end gap-1.5">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isGenerating}
+                  aria-label="Attach any file or image"
+                  className="size-8 shrink-0 border border-edge bg-background text-muted-foreground hover:text-foreground hover:border-primary grid place-items-center transition-colors disabled:opacity-40 cursor-pointer"
+                >
+                  <Paperclip className="size-3.5" />
+                </button>
+                <Textarea
+                  value={followUp}
+                  onChange={(e) => setFollowUp(e.target.value)}
+                  onPaste={handlePaste}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
+                  placeholder="Ask for a change or drop an image/file…"
+                  aria-label="Ask for a change"
+                  rows={1}
+                  className="min-h-[36px] max-h-[120px] resize-none border-0 px-2 py-1.5 text-[13.5px]"
+                />
+                <button
+                  type="button"
+                  onClick={handleSend}
+                  disabled={(!followUp.trim() && attachments.length === 0) || isGenerating}
+                  aria-label="Send"
+                  className="size-8 shrink-0 bg-primary text-primary-foreground grid place-items-center transition-all hover:bg-primary/85 active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                >
+                  <ArrowUp className="size-4" />
+                </button>
+              </div>
             </div>
           </div>
         </aside>

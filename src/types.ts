@@ -11,6 +11,28 @@ export interface AppVersion {
   createdAt: string;
 }
 
+export interface AttachedFile {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  kind: "image" | "inline" | "text" | "binary";
+  /** Text content when kind === "text" */
+  content?: string;
+  /** Raw base64 (without data: prefix) when kind === "image" or "inline" */
+  base64Data?: string;
+  /** Data URL for rendering image thumbnails in the UI */
+  previewUrl?: string;
+}
+
+export interface ChatAttachmentMeta {
+  name: string;
+  mimeType: string;
+  size: number;
+  kind: AttachedFile["kind"];
+  previewUrl?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -19,11 +41,7 @@ export interface ChatMessage {
   elapsedSeconds?: number;
   version?: number;
   attachmentName?: string;
-}
-
-export interface AttachedFile {
-  name: string;
-  content: string;
+  attachments?: ChatAttachmentMeta[];
 }
 
 export interface UserSession {

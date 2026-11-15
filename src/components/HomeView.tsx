@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Paperclip, X } from "lucide-react";
+import { ArrowUp, File as FileIcon, Paperclip, X } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Textarea } from "@/src/components/ui/textarea";
 import { CornerBrackets } from "@/src/components/CornerBrackets";
@@ -9,13 +9,20 @@ import {
   TEMPLATES,
   type TemplateItem,
 } from "@/src/data/templates";
+import {
+  MAX_ATTACHMENTS,
+  MAX_FILE_BYTES,
+  formatFileSize,
+  processUploadedFile,
+} from "@/src/lib/fileAttachment";
 import type { AttachedFile } from "@/src/types";
+import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
 
 interface HomeViewProps {
   prompt: string;
   onPromptChange: (value: string) => void;
-  onSubmitPrompt: (promptText: string, attachment: AttachedFile | null) => void;
+  onSubmitPrompt: (promptText: string, attachments: AttachedFile[]) => void;
   isPro: boolean;
   onOpenPricing: () => void;
 }
@@ -36,7 +43,8 @@ export function HomeView({
   onOpenPricing,
 }: HomeViewProps) {
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
-  const [attachment, setAttachment] = useState<AttachedFile | null>(null);
+  const [attachments, setAttachments] = useState<AttachedFile[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -55,28 +63,62 @@ export function HomeView({
     window.setTimeout(() => textareaRef.current?.focus(), 120);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 150_000) {
-      toast.error("Reference file must be under 150 KB");
+  const addFiles = async (fileList: FileList | File[]) => {
+    const incoming = Array.from(fileList);
+    if (incoming.length === 0) return;
+
+    const remainingSlots = MAX_ATTACHMENTS - attachments.length;
+    if (remainingSlots <= 0) {
+      toast.error(`Maximum ${MAX_ATTACHMENTS} reference files per prompt`);
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const content = typeof reader.result === "string" ? reader.result : "";
-      setAttachment({ name: file.name, content });
-      toast.success(`Attached ${file.name}`);
-    };
-    reader.readAsText(file);
+
+    const batch = incoming.slice(0, remainingSlots);
+    if (incoming.length > remainingSlots) {
+      toast.info(`Added first ${remainingSlots} file(s); limit is ${MAX_ATTACHMENTS}`);
+    }
+
+    const processed: AttachedFile[] = [];
+    for (const file of batch) {
+      if (file.size > MAX_FILE_BYTES) {
+        toast.error(`${file.name} exceeds 4 MB limit`);
+        continue;
+      }
+      try {
+        processed.push(await processUploadedFile(file));
+      } catch {
+        toast.error(`Could not read ${file.name}`);
+      }
+    }
+
+    if (processed.length > 0) {
+      setAttachments((prev) => [...prev, ...processed]);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      void addFiles(e.target.files);
+    }
     e.target.value = "";
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(e.clipboardData.files || []);
+    if (files.length > 0) {
+      e.preventDefault();
+      void addFiles(files);
+    }
   };
 
   const handleSubmit = () => {
     const trimmed = prompt.trim();
-    if (!trimmed) return;
-    onSubmitPrompt(trimmed, attachment);
-    setAttachment(null);
+    if (!trimmed && attachments.length === 0) return;
+    onSubmitPrompt(
+      trimmed || "Build a web app matching the attached reference.",
+      attachments
+    );
+    setAttachments([]);
   };
 
   return (
@@ -115,13 +157,35 @@ export function HomeView({
           </p>
 
           {/* Composer Box with Culio Corner Brackets */}
-          <div className="relative mt-9 w-full max-w-2xl border border-edge bg-card p-3 focus-within:border-primary transition-colors">
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDragging(true);
+            }}
+            onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                setIsDragging(false);
+              }
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDragging(false);
+              if (e.dataTransfer.files?.length) {
+                void addFiles(e.dataTransfer.files);
+              }
+            }}
+            className={cn(
+              "relative mt-9 w-full max-w-2xl border bg-card p-3 focus-within:border-primary transition-colors",
+              isDragging ? "border-primary bg-primary/5" : "border-edge"
+            )}
+          >
             <CornerBrackets />
 
             <Textarea
               ref={textareaRef}
               value={prompt}
               onChange={(e) => onPromptChange(e.target.value)}
+              onPaste={handlePaste}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
@@ -134,20 +198,44 @@ export function HomeView({
               className="min-h-[76px] resize-none border-0 p-1.5 text-[15px] leading-relaxed"
             />
 
-            {attachment && (
-              <div className="flex items-center gap-2 mt-1 mb-2 px-2.5 py-1 border border-edge bg-background text-xs w-fit max-w-full">
-                <Paperclip className="size-3.5 text-primary shrink-0" />
-                <span className="truncate max-w-[220px] font-mono">
-                  {attachment.name}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setAttachment(null)}
-                  aria-label="Remove attachment"
-                  className="text-muted-foreground hover:text-foreground cursor-pointer"
-                >
-                  <X className="size-3.5" />
-                </button>
+            {attachments.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 mt-1.5 mb-2">
+                {attachments.map((file) => (
+                  <div
+                    key={file.id}
+                    className="flex items-center gap-2 border border-edge bg-background px-2 py-1 text-xs max-w-[260px]"
+                  >
+                    {file.previewUrl ? (
+                      <img
+                        src={file.previewUrl}
+                        alt={file.name}
+                        className="size-6 object-cover border border-edge shrink-0 bg-muted"
+                      />
+                    ) : (
+                      <FileIcon className="size-3.5 text-primary shrink-0" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-mono text-[11px] text-foreground">
+                        {file.name}
+                      </div>
+                      <div className="font-mono text-[10px] text-muted-foreground uppercase">
+                        {formatFileSize(file.size)}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAttachments((prev) =>
+                          prev.filter((item) => item.id !== file.id)
+                        )
+                      }
+                      aria-label={`Remove ${file.name}`}
+                      className="text-muted-foreground hover:text-foreground cursor-pointer shrink-0 p-0.5"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
 
@@ -155,7 +243,7 @@ export function HomeView({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".txt,.md,.json,.html,.css,.csv"
+                multiple
                 onChange={handleFileChange}
                 className="hidden"
               />
@@ -164,7 +252,7 @@ export function HomeView({
                 variant="outline"
                 size="icon"
                 onClick={() => fileInputRef.current?.click()}
-                aria-label="Attach reference file"
+                aria-label="Attach any file or image for reference"
                 className="size-9 border-edge bg-background hover:bg-muted"
               >
                 <Paperclip className="size-4" />
@@ -183,7 +271,7 @@ export function HomeView({
               <Button
                 type="button"
                 onClick={handleSubmit}
-                disabled={!prompt.trim()}
+                disabled={!prompt.trim() && attachments.length === 0}
                 aria-label="Build"
                 className="h-9 px-5 font-mono uppercase text-xs gap-2"
               >

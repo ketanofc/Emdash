@@ -1,4 +1,4 @@
-import { Moon, Sun, Clock } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { CornerBrackets } from "@/src/components/CornerBrackets";
 import type { UserSession } from "@/src/types";
@@ -6,44 +6,25 @@ import { cn } from "@/src/lib/utils";
 
 interface NavbarProps {
   mode: "home" | "workspace";
-  quotaRemainingSeconds: number;
-  quotaTotalSeconds: number;
   isDark: boolean;
   onToggleTheme: () => void;
   onGoHome: () => void;
   onOpenTemplates: () => void;
   onOpenPricing: () => void;
-  onOpenQuota: () => void;
   onOpenAuth: () => void;
   user: UserSession | null;
 }
 
-export function formatQuota(secondsRemaining: number): string {
-  const clamped = Math.max(0, secondsRemaining);
-  const hours = Math.floor(clamped / 3600);
-  const mins = Math.floor((clamped % 3600) / 60);
-  return `${hours}h ${String(mins).padStart(2, "0")}m left`;
-}
-
 export function Navbar({
   mode,
-  quotaRemainingSeconds,
-  quotaTotalSeconds,
   isDark,
   onToggleTheme,
   onGoHome,
   onOpenTemplates,
   onOpenPricing,
-  onOpenQuota,
   onOpenAuth,
   user,
 }: NavbarProps) {
-  const pct = Math.max(
-    0,
-    Math.min(100, (quotaRemainingSeconds / quotaTotalSeconds) * 100)
-  );
-  const isLow = quotaRemainingSeconds < 1800;
-  const isPro = user?.plan === "pro";
 
   return (
     <aside className="sticky top-0 z-40 shrink-0 bg-background px-2 pt-2">
@@ -102,37 +83,6 @@ export function Navbar({
         </nav>
 
         <div className="flex flex-1 items-center justify-end gap-2 shrink-0">
-          {isPro ? (
-            <button
-              type="button"
-              onClick={onOpenPricing}
-              className="inline-flex items-center gap-1.5 h-9 px-3 border border-edge bg-background font-mono uppercase text-xs text-foreground hover:border-primary transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-            >
-              <Clock className="size-3.5 text-primary" />
-              <span>Unlimited</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={onOpenQuota}
-              aria-label="Daily build time"
-              className={cn(
-                "inline-flex items-center gap-2 h-9 px-3 border bg-background font-mono uppercase text-xs transition-colors whitespace-nowrap shrink-0 cursor-pointer tabular-nums",
-                isLow
-                  ? "border-primary text-primary hover:bg-primary/5"
-                  : "border-edge text-muted-foreground hover:text-foreground hover:border-neutral"
-              )}
-            >
-              <span>{formatQuota(quotaRemainingSeconds)}</span>
-              <span className="w-10 h-1 bg-muted overflow-hidden hidden sm:inline-block">
-                <span
-                  className="block h-full bg-primary transition-all duration-300"
-                  style={{ width: `${pct}%` }}
-                />
-              </span>
-            </button>
-          )}
-
           <Button
             variant="outline"
             size="icon"
