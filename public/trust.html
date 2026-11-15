@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Trust Center — Emdash</title>
+    <link rel="icon" type="image/png" href="/assets/emdash-logo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #f6f6f6;
+        --card: #ffffff;
+        --fg: #09090b;
+        --muted: #4a4a4a;
+        --edge: #dedede;
+        --primary: #ff5401;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #121212;
+          --card: #18181b;
+          --fg: #fafafa;
+          --muted: #9f9fa9;
+          --edge: #27272a;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 24px 12px 48px;
+      }
+      .rail {
+        border: 1px solid var(--edge);
+        background: var(--card);
+      }
+      .header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 24px;
+        border-bottom: 1px solid var(--edge);
+      }
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+        color: var(--fg);
+        font-weight: 600;
+        font-size: 16px;
+      }
+      .brand img {
+        width: 24px;
+        height: 24px;
+        object-fit: cover;
+      }
+      .back {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12px;
+        color: var(--muted);
+        text-decoration: none;
+        border: 1px solid var(--edge);
+        padding: 6px 12px;
+      }
+      .back:hover {
+        color: var(--primary);
+        border-color: var(--primary);
+      }
+      .hero {
+        padding: 36px 24px;
+        border-bottom: 1px solid var(--edge);
+      }
+      .kicker {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11px;
+        text-transform: uppercase;
+        color: var(--primary);
+        margin-bottom: 8px;
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: clamp(24px, 4vw, 36px);
+        letter-spacing: -0.02em;
+        line-height: 1.15;
+      }
+      .lead {
+        margin: 0;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.6;
+        max-width: 640px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 1px;
+        background: var(--edge);
+      }
+      .cell {
+        background: var(--card);
+        padding: 24px;
+      }
+      .cell h2 {
+        margin: 0 0 8px;
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .cell p {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--muted);
+      }
+      .foot {
+        border-top: 1px solid var(--edge);
+        padding: 16px 24px;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .foot a {
+        color: var(--primary);
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="rail">
+        <header class="header">
+          <a href="/" class="brand">
+            <img src="/assets/emdash-logo.png" alt="Emdash logo" />
+            <span>Emdash Trust Center</span>
+          </a>
+          <a href="/" class="back">Back to Builder</a>
+        </header>
+
+        <section class="hero">
+          <div class="kicker">Security &amp; Transparency</div>
+          <h1>How Emdash protects your prompts, files, and generated apps</h1>
+          <p class="lead">
+            Emdash is designed with minimal data retention by default. Build sessions, theme preferences, and daily usage counters remain in your browser, while preview code runs inside sandboxed iframes.
+          </p>
+        </section>
+
+        <div class="grid">
+          <div class="cell">
+            <h2>Sandboxed App Previews</h2>
+            <p>
+              Generated applications render inside isolated iframe containers so preview scripts cannot access parent session tokens or host DOM state.
+            </p>
+          </div>
+          <div class="cell">
+            <h2>Transport &amp; API Security</h2>
+            <p>
+              All generation requests, uploaded reference assets, and live publish operations are transmitted over encrypted HTTPS connections and processed server-side without exposing provider keys in the browser.
+            </p>
+          </div>
+          <div class="cell">
+            <h2>Minimal Local Storage</h2>
+            <p>
+              Your theme setting, daily build quota, and optional local display profile reside in browser storage under your control and can be cleared anytime.
+            </p>
+          </div>
+          <div class="cell">
+            <h2>Vulnerability Reporting</h2>
+            <p>
+              Found a security issue or privacy concern? Email our security team directly at support@emdash.build for a prompt response.
+            </p>
+          </div>
+        </div>
+
+        <footer class="foot">
+          <span>Emdash Security &amp; Compliance</span>
+          <span>Contact: <a href="mailto:support@emdash.build">support@emdash.build</a></span>
+        </footer>
+      </div>
+    </div>
+  </body>
+</html>

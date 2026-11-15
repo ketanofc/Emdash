@@ -467,17 +467,6 @@ export function HomeView({
       <div className="w-full px-2">
         <div className="relative flex h-8 md:h-10 w-full min-w-0 md:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto border-x border-edge bg-card hatch-pattern" />
       </div>
-
-      <footer className="w-full px-2 pb-4">
-        <div className="screen-line-before screen-line-after relative w-full min-w-0 md:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto border-x border-edge bg-card px-2.5 sm:px-4 md:px-10 py-5 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span className="font-mono uppercase text-xs text-muted-foreground">
-            Emdash
-          </span>
-          <span className="font-mono uppercase text-[11px] text-muted-foreground text-center">
-            Build time resets every 24 hours · Ads keep Emdash free
-          </span>
-        </div>
-      </footer>
     </main>
   );
 }

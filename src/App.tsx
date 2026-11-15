@@ -2,11 +2,14 @@ import { useCallback, useEffect, useState } from "react";
 import { Navbar } from "@/src/components/Navbar";
 import { HomeView } from "@/src/components/HomeView";
 import { WorkspaceView } from "@/src/components/WorkspaceView";
+import { Footer, type DocSection } from "@/src/components/Footer";
 import {
   AdRewardDialog,
   AuthDialog,
   PricingDialog,
   PublishDialog,
+  SponsorSlotDialog,
+  SupportDocsDialog,
   TemplatesDialog,
 } from "@/src/components/Dialogs";
 import type {
@@ -88,6 +91,9 @@ export default function App() {
     version: AppVersion | null;
     path: string | null;
   }>({ open: false, version: null, path: null });
+  const [docsOpen, setDocsOpen] = useState(false);
+  const [docsSection, setDocsSection] = useState<DocSection>("quickstart");
+  const [sponsorOpen, setSponsorOpen] = useState(false);
 
   const isPro = (user?.plan ?? planOverride) === "pro";
   const quotaRemainingSeconds = Math.max(0, TOTAL_QUOTA_SECONDS - usedSeconds);
@@ -391,13 +397,25 @@ export default function App() {
       />
 
       {mode === "home" ? (
-        <HomeView
-          prompt={homePrompt}
-          onPromptChange={setHomePrompt}
-          onSubmitPrompt={handleStartFromHome}
-          isPro={isPro}
-          onOpenPricing={() => setPricingOpen(true)}
-        />
+        <>
+          <HomeView
+            prompt={homePrompt}
+            onPromptChange={setHomePrompt}
+            onSubmitPrompt={handleStartFromHome}
+            isPro={isPro}
+            onOpenPricing={() => setPricingOpen(true)}
+          />
+          <Footer
+            onGoHome={handleGoHome}
+            onOpenTemplates={handleOpenTemplates}
+            onOpenPricing={() => setPricingOpen(true)}
+            onOpenDocs={(section = "quickstart") => {
+              setDocsSection(section);
+              setDocsOpen(true);
+            }}
+            onOpenSponsor={() => setSponsorOpen(true)}
+          />
+        </>
       ) : (
         <WorkspaceView
           messages={messages}
@@ -451,6 +469,18 @@ export default function App() {
         user={user}
         onSignIn={handleSignIn}
         onSignOut={handleSignOut}
+      />
+
+      <SupportDocsDialog
+        open={docsOpen}
+        onOpenChange={setDocsOpen}
+        section={docsSection}
+        onSectionChange={setDocsSection}
+      />
+
+      <SponsorSlotDialog
+        open={sponsorOpen}
+        onOpenChange={setSponsorOpen}
       />
     </div>
   );

@@ -12,6 +12,8 @@ import { Button } from "@/src/components/ui/button";
 import { CornerBrackets } from "@/src/components/CornerBrackets";
 import { TEMPLATES, type TemplateItem } from "@/src/data/templates";
 import type { AppVersion, UserSession } from "@/src/types";
+import type { DocSection } from "@/src/components/Footer";
+import { cn } from "@/src/lib/utils";
 
 interface AdRewardDialogProps {
   open: boolean;
@@ -483,6 +485,454 @@ export function AuthDialog({
               </Button>
               <Button type="submit" className="font-mono uppercase text-xs">
                 Continue
+              </Button>
+            </DialogFooter>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+interface SupportDocsDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  section: DocSection;
+  onSectionChange: (section: DocSection) => void;
+}
+
+const DOC_TABS: Array<{ id: DocSection; label: string }> = [
+  { id: "quickstart", label: "Quickstart" },
+  { id: "prompting", label: "Prompting & Files" },
+  { id: "quota", label: "Quota & Export" },
+  { id: "privacy", label: "Privacy Policy" },
+  { id: "terms", label: "Terms of Service" },
+  { id: "security", label: "Security" },
+];
+
+export function SupportDocsDialog({
+  open,
+  onOpenChange,
+  section,
+  onSectionChange,
+}: SupportDocsDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-xl border-edge bg-card">
+        <CornerBrackets />
+        <DialogHeader className="pr-6">
+          <DialogTitle>Support documentation</DialogTitle>
+          <DialogDescription>
+            Guides for prompting, file attachments, daily build time, and exporting apps.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div
+          role="tablist"
+          aria-label="Documentation topics"
+          className="flex flex-wrap gap-1 border border-edge bg-background p-1"
+        >
+          {DOC_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={section === tab.id}
+              onClick={() => onSectionChange(tab.id)}
+              className={cn(
+                "px-2.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer",
+                section === tab.id
+                  ? "bg-card text-primary border border-edge"
+                  : "text-muted-foreground hover:text-foreground border border-transparent"
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="border border-edge bg-background p-4 text-xs leading-relaxed text-muted-foreground space-y-3 max-h-[320px] overflow-y-auto">
+          {section === "quickstart" && (
+            <>
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-1">
+                  01. Describe what you want to build
+                </h3>
+                <p>
+                  Enter a plain-language prompt in the composer or click any starter template to populate a structured starting prompt. Press Enter or click Build app to launch the interactive workspace.
+                </p>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-1">
+                  02. Iterate and inspect across viewports
+                </h3>
+                <p>
+                  In the workspace, use the Build Chat panel on the left to request layout adjustments, color changes, or new interactive features. Switch between Desktop, Tablet, and Mobile preview widths at the top of the preview pane.
+                </p>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-1">
+                  03. Restore versions anytime
+                </h3>
+                <p>
+                  Every successful prompt creates a numbered version snapshot so you can compare iterations or roll back without losing earlier work.
+                </p>
+              </div>
+            </>
+          )}
+
+          {section === "prompting" && (
+            <>
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-1">
+                  Attaching reference files and screenshots
+                </h3>
+                <p>
+                  Click the paperclip button, drag and drop files directly onto the prompt box, or paste screenshots from your clipboard. You can attach up to 4 files per message (max 4 MB each), including PNG/JPG/WebP mockups, HTML/CSS snippets, JSON data, or Markdown specs.
+                </p>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-1">
+                  Writing clear prompts
+                </h3>
+                <p>
+                  Specify your target audience, core interactive workflow, preferred color mood, and required sections. Mention concrete states (filters, modals, tabs, or forms) so generated code includes real client-side interactivity.
+                </p>
+              </div>
+            </>
+          )}
+
+          {section === "quota" && (
+            <>
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-1">
+                  Free daily build quota (5 hours/day)
+                </h3>
+                <p>
+                  Every free user receives 5 hours of daily build quota, resetting every 24 hours. When your daily allowance runs low, you can watch a short 15-second sponsored spot to add 20 bonus minutes immediately, or upgrade to Emdash Pro for unlimited ad-free builds.
+                </p>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-1">
+                  Exporting HTML &amp; live publishing
+                </h3>
+                <p>
+                  Click Download HTML to save a self-contained single-file HTML bundle you can host anywhere, or click Publish to generate a live shareable route directly from the workspace.
+                </p>
+              </div>
+            </>
+          )}
+
+          {section === "privacy" && (
+            <>
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-1">
+                  Privacy Policy &amp; local browser storage
+                </h3>
+                <p>
+                  Your theme preference, daily build quota counter, and local account profile are stored in your browser&apos;s localStorage. We do not sell personal data or run invasive cross-site tracking scripts.
+                </p>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-1">
+                  Prompts &amp; uploaded reference files
+                </h3>
+                <p>
+                  Prompts and attached reference files are transmitted solely to generate your requested application output and are not retained beyond the active build request unless you explicitly publish a route.
+                </p>
+              </div>
+            </>
+          )}
+
+          {section === "terms" && (
+            <>
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-1">
+                  Code ownership &amp; commercial usage
+                </h3>
+                <p>
+                  Applications generated and exported through Emdash can be downloaded, modified, and deployed freely for personal or commercial projects with zero attribution requirements.
+                </p>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-1">
+                  Acceptable use &amp; daily quota
+                </h3>
+                <p>
+                  Free accounts receive 5 hours of daily build quota, supported by clearly labeled sponsor slots. Automated scraping, abusive traffic, or attempts to bypass server safeguards are prohibited.
+                </p>
+              </div>
+            </>
+          )}
+
+          {section === "security" && (
+            <>
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-1">
+                  Sandboxed live previews &amp; API isolation
+                </h3>
+                <p>
+                  Every generated web application runs inside an isolated iframe preview container, keeping preview execution separated from your host session. All model credentials stay strictly server-side behind encrypted API routes.
+                </p>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-1">
+                  Reporting security issues
+                </h3>
+                <p>
+                  For security disclosures or compliance inquiries, review our{" "}
+                  <a
+                    href="/trust.html"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    Trust Center
+                  </a>{" "}
+                  or email{" "}
+                  <a
+                    href="mailto:support@emdash.build"
+                    className="text-primary hover:underline"
+                  >
+                    support@emdash.build
+                  </a>
+                  .
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+
+        <DialogFooter className="sm:justify-between">
+          <a
+            href="mailto:support@emdash.build"
+            className="text-xs text-muted-foreground hover:text-primary transition-colors self-center"
+          >
+            Need direct help? support@emdash.build
+          </a>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onOpenChange(false)}
+            className="border-edge font-mono uppercase text-xs"
+          >
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+interface SponsorSlotDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export function SponsorSlotDialog({
+  open,
+  onOpenChange,
+}: SponsorSlotDialogProps) {
+  const [slot, setSlot] = useState<"composer" | "template">("composer");
+  const [company, setCompany] = useState("");
+  const [email, setEmail] = useState("");
+  const [url, setUrl] = useState("");
+  const [headline, setHeadline] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setFormError(null);
+    }
+  }, [open]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!company.trim()) {
+      setFormError("Enter your company or product name.");
+      return;
+    }
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !trimmedEmail.includes("@")) {
+      setFormError("Enter a valid work email address.");
+      return;
+    }
+    if (!headline.trim()) {
+      setFormError("Provide a short sponsor headline (up to 70 characters).");
+      return;
+    }
+    setFormError(null);
+    setSubmitted(true);
+  };
+
+  const resetForm = () => {
+    setSubmitted(false);
+    setCompany("");
+    setEmail("");
+    setUrl("");
+    setHeadline("");
+    setFormError(null);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg border-edge bg-card">
+        <CornerBrackets />
+        {submitted ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>Sponsorship request received</DialogTitle>
+              <DialogDescription>
+                We recorded your interest for the{" "}
+                {slot === "composer" ? "Hero Composer Banner" : "Templates Grid Slot"}.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="border border-edge bg-background p-3.5 text-xs space-y-1.5">
+              <div className="font-medium text-foreground">
+                {company} · {slot === "composer" ? "Composer Banner ($290/wk)" : "Template Slot ($190/wk)"}
+              </div>
+              <div className="text-muted-foreground">{headline}</div>
+              <div className="text-muted-foreground">
+                Confirmation details will be sent to {email}.
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={resetForm}
+                className="border-edge font-mono uppercase text-xs"
+              >
+                New request
+              </Button>
+              <Button
+                type="button"
+                onClick={() => onOpenChange(false)}
+                className="font-mono uppercase text-xs"
+              >
+                Done
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <form onSubmit={handleSubmit} className="grid gap-4">
+            <DialogHeader className="pr-6">
+              <DialogTitle>Sponsor a slot on Emdash</DialogTitle>
+              <DialogDescription>
+                Support free daily build hours by featuring your product in a native, non-intrusive placement.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setSlot("composer")}
+                className={cn(
+                  "border p-3 text-left transition-colors cursor-pointer",
+                  slot === "composer"
+                    ? "border-primary bg-primary/5"
+                    : "border-edge bg-background hover:border-neutral"
+                )}
+              >
+                <div className="text-xs font-semibold text-foreground">
+                  Composer Banner
+                </div>
+                <div className="text-[11px] text-muted-foreground mt-0.5 tabular-nums">
+                  $290 / week · Above fold
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSlot("template")}
+                className={cn(
+                  "border p-3 text-left transition-colors cursor-pointer",
+                  slot === "template"
+                    ? "border-primary bg-primary/5"
+                    : "border-edge bg-background hover:border-neutral"
+                )}
+              >
+                <div className="text-xs font-semibold text-foreground">
+                  Template Grid Card
+                </div>
+                <div className="text-[11px] text-muted-foreground mt-0.5 tabular-nums">
+                  $190 / week · Gallery slot
+                </div>
+              </button>
+            </div>
+
+            <div className="grid gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="grid gap-1">
+                  <span className="text-xs font-medium text-foreground">
+                    Company or product
+                  </span>
+                  <input
+                    type="text"
+                    value={company}
+                    onChange={(e) => setCompany(e.target.value)}
+                    placeholder="CloudNest"
+                    className="h-9 border border-edge bg-background px-3 text-xs outline-none focus-visible:border-primary"
+                  />
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-xs font-medium text-foreground">
+                    Work email
+                  </span>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="growth@cloudnest.dev"
+                    className="h-9 border border-edge bg-background px-3 text-xs outline-none focus-visible:border-primary"
+                  />
+                </label>
+              </div>
+              <label className="grid gap-1">
+                <span className="text-xs font-medium text-foreground">
+                  Destination URL (optional)
+                </span>
+                <input
+                  type="url"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="https://cloudnest.dev"
+                  className="h-9 border border-edge bg-background px-3 text-xs outline-none focus-visible:border-primary"
+                />
+              </label>
+              <label className="grid gap-1">
+                <span className="text-xs font-medium text-foreground">
+                  Sponsor headline
+                </span>
+                <input
+                  type="text"
+                  maxLength={70}
+                  value={headline}
+                  onChange={(e) => setHeadline(e.target.value)}
+                  placeholder="Deploy exported HTML in seconds with 3 months free"
+                  className="h-9 border border-edge bg-background px-3 text-xs outline-none focus-visible:border-primary"
+                />
+              </label>
+
+              {formError && (
+                <div className="border border-destructive/40 bg-destructive/5 px-2.5 py-1.5 text-xs text-destructive">
+                  {formError}
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                className="border-edge font-mono uppercase text-xs"
+              >
+                Cancel
+              </Button>
+              <Button type="submit" className="font-mono uppercase text-xs">
+                Request slot
               </Button>
             </DialogFooter>
           </form>
