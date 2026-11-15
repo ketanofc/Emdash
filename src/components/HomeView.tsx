@@ -124,21 +124,21 @@ export function HomeView({
   };
 
   return (
-    <main className="flex-1 overflow-auto overflow-x-hidden bg-background">
+    <main className="flex-1 overflow-x-clip bg-background">
       {/* Culio Diagonal Hatch Top Strip */}
       <div className="w-full px-2">
-        <div className="relative flex h-8 md:h-10 w-full md:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto border-x border-edge hatch-pattern" />
+        <div className="relative flex h-8 md:h-10 w-full min-w-0 md:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto border-x border-edge bg-card hatch-pattern" />
       </div>
 
       {/* Hero Rail Section */}
-      <section className="px-2">
-        <div className="screen-line-before screen-line-after relative md:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto flex flex-col items-center border-x border-edge bg-card/50 px-4 md:px-10 py-14 md:py-20">
+      <section className="w-full px-2">
+        <div className="screen-line-before screen-line-after relative w-full min-w-0 md:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto flex flex-col items-center border-x border-edge bg-card px-2.5 sm:px-4 md:px-10 py-10 sm:py-14 md:py-20">
           <CornerBrackets />
 
           <button
             type="button"
             onClick={onOpenPricing}
-            className="inline-flex items-center gap-2 border border-edge bg-background h-8 font-mono uppercase text-xs px-3 text-foreground hover:border-primary transition-colors cursor-pointer"
+            className="inline-flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 border border-edge bg-background min-h-8 font-mono uppercase text-[11px] sm:text-xs px-2.5 sm:px-3 py-1 text-foreground hover:border-primary transition-colors cursor-pointer max-w-full text-center"
           >
             <span className="bg-primary text-primary-foreground px-1.5 py-0.5 text-[10px] font-semibold">
               {isPro ? "PRO" : "FREE"}
@@ -150,7 +150,7 @@ export function HomeView({
             </span>
           </button>
 
-          <h1 className="mt-5 text-[38px] leading-[1.02] lg:text-6xl tracking-tighter font-semibold max-w-2xl text-balance text-center text-foreground">
+          <h1 className="mt-5 text-[32px] sm:text-[38px] leading-[1.04] lg:text-6xl tracking-tighter font-semibold max-w-2xl text-balance text-center text-foreground">
             What do you want to build?
           </h1>
 
@@ -336,12 +336,12 @@ export function HomeView({
 
       {/* Culio Diagonal Hatch Separator */}
       <div className="w-full px-2">
-        <div className="relative flex h-8 md:h-10 w-full md:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto border-x border-edge hatch-pattern" />
+        <div className="relative flex h-8 md:h-10 w-full min-w-0 md:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto border-x border-edge bg-card hatch-pattern" />
       </div>
 
       {/* Templates Rail Section */}
-      <section id="templates-gallery" className="px-2">
-        <div className="screen-line-before screen-line-after relative md:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto border-x border-edge bg-background px-4 md:px-10 py-12 md:py-16">
+      <section id="templates-gallery" className="w-full px-2">
+        <div className="screen-line-before screen-line-after relative w-full min-w-0 md:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto border-x border-edge bg-background px-2.5 sm:px-4 md:px-10 py-12 md:py-16">
           <CornerBrackets />
 
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 mb-8">
@@ -465,15 +465,15 @@ export function HomeView({
 
       {/* Culio Diagonal Hatch Bottom Strip */}
       <div className="w-full px-2">
-        <div className="relative flex h-8 md:h-10 w-full md:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto border-x border-edge hatch-pattern" />
+        <div className="relative flex h-8 md:h-10 w-full min-w-0 md:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto border-x border-edge bg-card hatch-pattern" />
       </div>
 
-      <footer className="px-2 pb-4">
-        <div className="screen-line-before screen-line-after relative md:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto border-x border-edge bg-card px-4 md:px-10 py-5 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <footer className="w-full px-2 pb-4">
+        <div className="screen-line-before screen-line-after relative w-full min-w-0 md:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto border-x border-edge bg-card px-2.5 sm:px-4 md:px-10 py-5 flex flex-col sm:flex-row items-center justify-between gap-2">
           <span className="font-mono uppercase text-xs text-muted-foreground">
             Emdash
           </span>
-          <span className="font-mono uppercase text-[11px] text-muted-foreground">
+          <span className="font-mono uppercase text-[11px] text-muted-foreground text-center">
             Build time resets every 24 hours · Ads keep Emdash free
           </span>
         </div>

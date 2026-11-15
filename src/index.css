@@ -104,10 +104,13 @@
   body,
   #root {
     height: 100%;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: clip;
   }
 
   body {
-    @apply bg-background text-foreground font-sans antialiased selection:bg-primary selection:text-primary-foreground overflow-x-hidden;
+    @apply bg-background text-foreground font-sans antialiased selection:bg-primary selection:text-primary-foreground;
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
@@ -133,8 +136,8 @@
   content: "";
   position: absolute;
   top: 0;
-  left: -100vw;
-  width: 200vw;
+  left: -0.5rem;
+  right: -0.5rem;
   height: 1px;
   background-color: var(--edge);
   z-index: 0;
@@ -149,12 +152,20 @@
   content: "";
   position: absolute;
   bottom: 0;
-  left: -100vw;
-  width: 200vw;
+  left: -0.5rem;
+  right: -0.5rem;
   height: 1px;
   background-color: var(--edge);
   z-index: 0;
   pointer-events: none;
+}
+
+@media (min-width: 768px) {
+  .screen-line-before::before,
+  .screen-line-after::after {
+    left: -100vw;
+    right: -100vw;
+  }
 }
 
 .hatch-pattern {

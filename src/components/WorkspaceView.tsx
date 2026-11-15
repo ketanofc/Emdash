@@ -272,9 +272,11 @@ export function WorkspaceView({
               ) : (
                 <div key={msg.id} className="flex flex-col gap-2">
                   <div className="flex items-center gap-2 font-mono uppercase text-[11px] text-muted-foreground">
-                    <span className="size-5 bg-primary text-primary-foreground grid place-items-center text-[11px] font-bold pb-0.5 shrink-0">
-                      —
-                    </span>
+                    <img
+                      src="/assets/emdash-logo.png"
+                      alt="Emdash"
+                      className="size-5 object-cover shrink-0"
+                    />
                     {msg.status === "thinking" ? (
                       <span className="inline-flex items-center gap-1.5 text-primary">
                         <Loader2 className="size-3.5 animate-spin" />
@@ -637,9 +639,11 @@ export function WorkspaceView({
             ) : !currentApp ? (
               <div className="w-full h-full grid place-items-center p-6 text-center text-muted-foreground">
                 <div className="grid gap-1.5 place-items-center">
-                  <span className="size-8 bg-primary text-primary-foreground grid place-items-center font-mono font-bold pb-0.5 mb-2">
-                    —
-                  </span>
+                  <img
+                    src="/assets/emdash-logo.png"
+                    alt="Emdash"
+                    className="size-8 object-cover mb-2"
+                  />
                   <span className="font-medium text-foreground text-sm">
                     Nothing here yet
                   </span>

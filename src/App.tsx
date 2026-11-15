@@ -372,7 +372,13 @@ export default function App() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-background text-foreground">
+    <div
+      className={
+        mode === "home"
+          ? "min-h-full w-full max-w-full overflow-x-clip flex flex-col bg-background text-foreground"
+          : "h-full w-full max-w-full overflow-x-clip flex flex-col bg-background text-foreground"
+      }
+    >
       <Navbar
         mode={mode}
         isDark={isDark}
