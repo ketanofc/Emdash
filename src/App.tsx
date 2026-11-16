@@ -485,19 +485,21 @@ export default function App() {
           : "min-h-full w-full max-w-full overflow-x-clip flex flex-col bg-background text-foreground"
       }
     >
-      <Navbar
-        mode={mode}
-        isDark={isDark}
-        onToggleTheme={() => setIsDark((d) => !d)}
-        onGoHome={handleGoHome}
-        onOpenTemplates={handleOpenTemplates}
-        onOpenPricing={() => setPricingOpen(true)}
-        onOpenWallet={() => setWalletOpen(true)}
-        onOpenAdmin={user?.role === "admin" ? () => navigateToMode("admin") : undefined}
-        onOpenAuth={() => setAuthOpen(true)}
-        user={user}
-        walletBalance={wallet.balance}
-      />
+      {mode !== "workspace" && (
+        <Navbar
+          mode={mode}
+          isDark={isDark}
+          onToggleTheme={() => setIsDark((d) => !d)}
+          onGoHome={handleGoHome}
+          onOpenTemplates={handleOpenTemplates}
+          onOpenPricing={() => setPricingOpen(true)}
+          onOpenWallet={() => setWalletOpen(true)}
+          onOpenAdmin={user?.role === "admin" ? () => navigateToMode("admin") : undefined}
+          onOpenAuth={() => setAuthOpen(true)}
+          user={user}
+          walletBalance={wallet.balance}
+        />
+      )}
 
       {mode === "admin" ? (
         <Suspense
@@ -542,6 +544,7 @@ export default function App() {
           isGenerating={isGenerating}
           isPro={isPro}
           isDark={isDark}
+          onGoHome={handleGoHome}
           onOpenPricing={() => setPricingOpen(true)}
           onOpenWallet={() => setWalletOpen(true)}
           onSendFollowUp={(p, files) => void handleFollowUp(p, files)}

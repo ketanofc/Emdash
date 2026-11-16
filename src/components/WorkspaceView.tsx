@@ -67,8 +67,9 @@ interface WorkspaceViewProps {
   isGenerating: boolean;
   isPro: boolean;
   isDark: boolean;
-  onOpenPricing: () => void;
-  onOpenWallet: () => void;
+  onGoHome?: () => void;
+  onOpenPricing?: () => void;
+  onOpenWallet?: () => void;
   onSendFollowUp: (prompt: string, attachments: AttachedFile[]) => void;
   onRuntimeError: (version: AppVersion, errors: string[]) => void;
   onExport: (version: AppVersion) => void;
@@ -299,8 +300,7 @@ export function WorkspaceView({
   isGenerating,
   isPro,
   isDark,
-  onOpenPricing,
-  onOpenWallet,
+  onGoHome,
   onSendFollowUp,
   onRuntimeError,
   onExport,
@@ -532,32 +532,27 @@ export function WorkspaceView({
         : "w-full h-full";
 
   return (
-    <div className="flex-1 min-h-0 px-2 pb-2 flex flex-col relative">
-      <div className="flex-1 min-h-0 grid grid-cols-1 grid-rows-[minmax(260px,44%)_1fr] sm:grid-cols-[minmax(250px,310px)_1fr] md:grid-cols-[minmax(290px,350px)_1fr] lg:grid-cols-[minmax(320px,390px)_1fr] sm:grid-rows-[minmax(0,1fr)] border-x border-b border-edge bg-background">
+    <div className="flex-1 min-h-0 p-2 flex flex-col relative">
+      <div className="flex-1 min-h-0 grid grid-cols-1 grid-rows-[minmax(260px,44%)_1fr] sm:grid-cols-[minmax(250px,310px)_1fr] md:grid-cols-[minmax(290px,350px)_1fr] lg:grid-cols-[minmax(320px,390px)_1fr] sm:grid-rows-[minmax(0,1fr)] border border-edge bg-background">
         {/* Chat Pane */}
         <aside className="flex flex-col min-w-0 min-h-0 border-b sm:border-b-0 sm:border-r border-edge bg-background">
-          <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-edge bg-card shrink-0">
-            <span className="font-mono uppercase text-[11px] font-medium text-muted-foreground tracking-wider">
+          <div className="flex items-center justify-between gap-2 px-3 py-2 min-h-[49px] border-b border-edge bg-card shrink-0">
+            <button
+              type="button"
+              onClick={onGoHome}
+              aria-label="Emdash home"
+              className="flex items-center gap-1 sm:gap-1.5 font-semibold text-sm sm:text-base tracking-tight px-1 py-0.5 hover:opacity-85 transition-opacity focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <img
+                src="/assets/emdash-logo.png"
+                alt=""
+                className="size-4 sm:size-5 object-cover shrink-0"
+              />
+              <span>Emdash</span>
+            </button>
+            <span className="font-mono uppercase text-[11px] font-medium text-muted-foreground tracking-wider shrink-0">
               Build Chat
             </span>
-            <div className="flex items-center gap-1.5 min-w-0">
-              <button
-                type="button"
-                onClick={onOpenWallet}
-                className="inline-flex items-center gap-1.5 h-7 px-2 border border-edge bg-background font-mono uppercase text-[10px] text-foreground hover:border-primary transition-colors cursor-pointer"
-              >
-                <span>{isPro ? "Pro" : "Managed"}</span>
-              </button>
-              {!isPro && (
-                <button
-                  type="button"
-                  onClick={onOpenPricing}
-                  className="hidden sm:inline-flex items-center h-7 px-2 border border-edge bg-background font-mono uppercase text-[10px] text-muted-foreground hover:text-foreground hover:border-neutral transition-colors shrink-0 cursor-pointer"
-                >
-                  Free
-                </button>
-              )}
-            </div>
           </div>
 
           <div className="flex-1 overflow-auto p-4 flex flex-col gap-3.5">
@@ -846,9 +841,9 @@ export function WorkspaceView({
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isGenerating}
                   aria-label="Attach any file or image"
-                  className="size-8 shrink-0 border border-edge bg-background text-muted-foreground hover:text-foreground hover:border-primary grid place-items-center transition-colors disabled:opacity-40 cursor-pointer"
+                  className="size-7 shrink-0 border border-edge bg-background text-muted-foreground hover:text-foreground hover:border-primary grid place-items-center transition-colors disabled:opacity-40 cursor-pointer"
                 >
-                  <Paperclip className="size-3.5" />
+                  <Paperclip className="size-3" />
                 </button>
                 <Textarea
                   ref={textareaRef}
@@ -872,9 +867,9 @@ export function WorkspaceView({
                     onClick={onPause}
                     aria-label="Pause generation"
                     title="Pause generation"
-                    className="size-8 shrink-0 border border-destructive bg-destructive text-destructive-foreground grid place-items-center transition-all hover:bg-destructive/85 active:scale-95 cursor-pointer"
+                    className="size-7 shrink-0 border border-destructive bg-destructive text-destructive-foreground grid place-items-center transition-all hover:bg-destructive/85 active:scale-95 cursor-pointer"
                   >
-                    <Square className="size-3.5 fill-current" />
+                    <Square className="size-3 fill-current" />
                   </button>
                 ) : (
                   <button
@@ -882,9 +877,9 @@ export function WorkspaceView({
                     onClick={handleSend}
                     disabled={!followUp.trim() && attachments.length === 0}
                     aria-label="Send"
-                    className="size-8 shrink-0 border border-primary bg-primary text-primary-foreground grid place-items-center transition-all hover:bg-primary/85 active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                    className="size-7 shrink-0 border border-primary bg-primary text-primary-foreground grid place-items-center transition-all hover:bg-primary/85 active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
                   >
-                    <ArrowUp className="size-3.5" />
+                    <ArrowUp className="size-3" />
                   </button>
                 )}
               </div>

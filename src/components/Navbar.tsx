@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowUpRight, Coins, Moon, ShieldCheck, Sun, X } from "lucide-react";
+import { ArrowUpRight, Moon, ShieldCheck, Sun, X } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { CornerBrackets } from "@/src/components/CornerBrackets";
 import type { UserSession } from "@/src/types";
@@ -12,11 +12,11 @@ interface NavbarProps {
   onGoHome: () => void;
   onOpenTemplates: () => void;
   onOpenPricing: () => void;
-  onOpenWallet: () => void;
+  onOpenWallet?: () => void;
   onOpenAdmin?: () => void;
   onOpenAuth: () => void;
   user: UserSession | null;
-  walletBalance: number;
+  walletBalance?: number;
 }
 
 export function Navbar({
@@ -26,11 +26,9 @@ export function Navbar({
   onGoHome,
   onOpenTemplates,
   onOpenPricing,
-  onOpenWallet,
   onOpenAdmin,
   onOpenAuth,
   user,
-  walletBalance,
 }: NavbarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -125,17 +123,6 @@ export function Navbar({
         </nav>
 
         <div className="flex items-center justify-end gap-1.5 sm:gap-2 shrink-0 md:flex-1">
-          <button
-            type="button"
-            onClick={() => handleNavAction(onOpenWallet)}
-            title="Dash Coins wallet"
-            aria-label={`Dash Coins balance: ${walletBalance}`}
-            className="inline-flex items-center gap-1.5 h-8 sm:h-9 px-2 sm:px-2.5 border border-edge bg-background hover:border-primary font-mono text-[11px] sm:text-xs text-foreground transition-colors shrink-0 cursor-pointer tabular-nums"
-          >
-            <Coins className="size-3.5 text-primary shrink-0" />
-            <span>{walletBalance}</span>
-          </button>
-
           <Button
             variant="outline"
             size="icon"
