@@ -1,15 +1,41 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-const supabaseUrl =
+let supabaseUrl =
   typeof import.meta !== "undefined" && import.meta.env
-    ? (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim()
-    : undefined;
-const supabaseAnonKey =
+    ? (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() || ""
+    : "";
+let supabaseAnonKey =
   typeof import.meta !== "undefined" && import.meta.env
-    ? (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim()
-    : undefined;
+    ? (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() || ""
+    : "";
 
 let cachedClient: SupabaseClient | null = null;
+let hydrated = false;
+
+export async function hydrateSupabaseConfig(): Promise<boolean> {
+  if (supabaseUrl && supabaseAnonKey) return true;
+  if (hydrated || typeof window === "undefined") {
+    return Boolean(supabaseUrl && supabaseAnonKey);
+  }
+  hydrated = true;
+  try {
+    const res = await fetch("/api/public-config");
+    if (!res.ok) return false;
+    const data = (await res.json()) as {
+      supabaseUrl?: string;
+      supabaseAnonKey?: string;
+    };
+    if (data.supabaseUrl?.trim() && data.supabaseAnonKey?.trim()) {
+      supabaseUrl = data.supabaseUrl.trim();
+      supabaseAnonKey = data.supabaseAnonKey.trim();
+      cachedClient = null;
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+  return Boolean(supabaseUrl && supabaseAnonKey);
+}
 
 export function isSupabaseConfigured(): boolean {
   return Boolean(supabaseUrl && supabaseAnonKey);

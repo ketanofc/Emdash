@@ -12,7 +12,7 @@ import { Button } from "@/src/components/ui/button";
 import { CornerBrackets } from "@/src/components/CornerBrackets";
 import { TEMPLATES, type TemplateItem } from "@/src/data/templates";
 import { signInAccount, signOutAccount } from "@/src/lib/apiClient";
-import { isSupabaseConfigured } from "@/src/lib/supabase";
+import { hydrateSupabaseConfig, isSupabaseConfigured } from "@/src/lib/supabase";
 import type { UserSession, WalletSummary } from "@/src/types";
 import type { DocSection } from "@/src/components/Footer";
 import { cn } from "@/src/lib/utils";
@@ -196,7 +196,17 @@ export function AuthDialog({
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const supabaseActive = isSupabaseConfigured();
+  const [supabaseActive, setSupabaseActive] = useState(() => isSupabaseConfigured());
+
+  useEffect(() => {
+    if (open && !supabaseActive) {
+      void hydrateSupabaseConfig().then((ok) => {
+        if (ok) setSupabaseActive(true);
+      });
+    } else if (open) {
+      setSupabaseActive(isSupabaseConfigured());
+    }
+  }, [open, supabaseActive]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -290,44 +300,42 @@ export function AuthDialog({
               </DialogDescription>
             </DialogHeader>
 
-            {supabaseActive && (
-              <div className="grid grid-cols-2 border border-edge bg-background p-1 gap-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthMode("signin");
-                    setFormError(null);
-                  }}
-                  className={cn(
-                    "py-1.5 font-mono uppercase text-[11px] cursor-pointer transition-colors",
-                    authMode === "signin"
-                      ? "bg-card text-primary border border-edge"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  Sign in
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthMode("signup");
-                    setFormError(null);
-                    setInfoMessage(null);
-                  }}
-                  className={cn(
-                    "py-1.5 font-mono uppercase text-[11px] cursor-pointer transition-colors",
-                    authMode === "signup"
-                      ? "bg-card text-primary border border-edge"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  Sign up
-                </button>
-              </div>
-            )}
+            <div className="grid grid-cols-2 border border-edge bg-background p-1 gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("signin");
+                  setFormError(null);
+                }}
+                className={cn(
+                  "py-1.5 font-mono uppercase text-[11px] cursor-pointer transition-colors",
+                  authMode === "signin"
+                    ? "bg-card text-primary border border-edge"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Sign in
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("signup");
+                  setFormError(null);
+                  setInfoMessage(null);
+                }}
+                className={cn(
+                  "py-1.5 font-mono uppercase text-[11px] cursor-pointer transition-colors",
+                  authMode === "signup"
+                    ? "bg-card text-primary border border-edge"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Sign up
+              </button>
+            </div>
 
             <div className="grid gap-3">
-              {(!supabaseActive || authMode === "signup") && (
+              {authMode === "signup" && (
                 <label className="grid gap-1.5">
                   <span className="font-mono uppercase text-[11px] text-muted-foreground">
                     Name

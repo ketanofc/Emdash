@@ -95,6 +95,25 @@ export function createApp(customCtx?: Partial<ServerContext>) {
     res.json({ ok: true });
   });
 
+  expressApp.get("/api/public-config", (_req, res) => {
+    const supabaseUrl = (
+      process.env.VITE_SUPABASE_URL ||
+      process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      process.env.SUPABASE_URL ||
+      ""
+    ).trim();
+    const supabaseAnonKey = (
+      process.env.VITE_SUPABASE_ANON_KEY ||
+      process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+      process.env.SUPABASE_ANON_KEY ||
+      process.env.SUPABASE_PUBLISHABLE_KEY ||
+      ""
+    ).trim();
+    res.json({ supabaseUrl, supabaseAnonKey });
+  });
+
   expressApp.use("/api/auth", createAuthRouter(ctx));
   expressApp.use("/api/admin", createAdminRouter(ctx));
   expressApp.use("/api", createPublicApiRouter(ctx));

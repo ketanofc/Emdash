@@ -18,6 +18,7 @@ import {
   runPipelineViaServer,
 } from "@/src/lib/gemini";
 import { fetchAuthState, fetchWalletSummary } from "@/src/lib/apiClient";
+import { hydrateSupabaseConfig } from "@/src/lib/supabase";
 import {
   clearVersionsFromDb,
   loadVersionsFromDb,
@@ -138,6 +139,7 @@ export default function App() {
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const refreshSessionAndWallet = useCallback(async () => {
+    await hydrateSupabaseConfig();
     try {
       const auth = await fetchAuthState();
       setUser(auth.user);
