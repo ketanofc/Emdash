@@ -266,7 +266,10 @@ export default function App() {
         isFreshBuild ? [userMsg, thinkingMsg] : [...prev, userMsg, thinkingMsg]
       );
 
-      const currentApp = existingVersions[existingVersions.length - 1] ?? null;
+      const currentApp =
+        existingVersions.find((v) => v.version === selectedVersion) ??
+        existingVersions[existingVersions.length - 1] ??
+        null;
 
       try {
         const result = await runPipelineViaServer(
@@ -351,7 +354,7 @@ export default function App() {
         setIsGenerating(false);
       }
     },
-    [isGenerating]
+    [isGenerating, selectedVersion]
   );
 
   const handleStartFromHome = useCallback(

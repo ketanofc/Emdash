@@ -22,7 +22,7 @@ import {
   Loader2,
   Monitor,
   Paperclip,
-  Pencil,
+  RotateCcw,
   RotateCw,
   Settings,
   Smartphone,
@@ -319,6 +319,8 @@ export function WorkspaceView({
   const [reloadNonce, setReloadNonce] = useState(0);
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [revertedMessageId, setRevertedMessageId] = useState<string | null>(null);
+  const [statusToast, setStatusToast] = useState<string | null>(null);
   const [selectedFilePath, setSelectedFilePath] = useState<string>("");
   const [publishToastOpen, setPublishToastOpen] = useState(false);
 
@@ -332,10 +334,43 @@ export function WorkspaceView({
     window.setTimeout(() => setCopiedMessageId(null), 1500);
   };
 
-  const handleEditMessage = (text: string) => {
-    setFollowUp(text);
-    textareaRef.current?.focus();
+  const getMessageVersion = (msg: ChatMessage, index: number): number => {
+    if (msg.version) return msg.version;
+    for (let i = index + 1; i < messages.length; i++) {
+      if (messages[i].version) {
+        return messages[i].version!;
+      }
+    }
+    const userTurnNumber = messages
+      .slice(0, index + 1)
+      .filter((m) => m.role === "user").length;
+    if (versions.some((v) => v.version === userTurnNumber)) {
+      return userTurnNumber;
+    }
+    return versions[versions.length - 1]?.version ?? 1;
   };
+
+  const handleRevertToMessage = (msg: ChatMessage, index: number) => {
+    const targetVersion = getMessageVersion(msg, index);
+    if (!targetVersion) return;
+    onSelectVersion(targetVersion);
+    setRevertedMessageId(msg.id);
+    setStatusToast(`Reverted to Version ${targetVersion}`);
+    window.setTimeout(() => setRevertedMessageId(null), 1500);
+  };
+
+  const handleRevertToVersion = (targetVersion: number, msgId: string) => {
+    onSelectVersion(targetVersion);
+    setRevertedMessageId(msgId);
+    setStatusToast(`Reverted to Version ${targetVersion}`);
+    window.setTimeout(() => setRevertedMessageId(null), 1500);
+  };
+
+  useEffect(() => {
+    if (!statusToast) return;
+    const timer = window.setTimeout(() => setStatusToast(null), 2800);
+    return () => window.clearTimeout(timer);
+  }, [statusToast]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -532,115 +567,131 @@ export function WorkspaceView({
           </div>
 
           <div className="flex-1 overflow-auto p-4 flex flex-col gap-3.5">
-            {messages.map((msg) =>
-              msg.role === "user" ? (
-                <div
-                  key={msg.id}
-                  className="self-end max-w-[88%] border border-edge bg-card px-3.5 py-2 text-[13.5px] leading-relaxed text-foreground group relative"
-                >
-                  <div>{msg.content}</div>
-                  {msg.attachments && msg.attachments.length > 0 ? (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {msg.attachments.map((att, idx) => (
-                        <div
-                          key={`${att.name}-${idx}`}
-                          className="flex items-center gap-1.5 border border-edge bg-background px-1.5 py-1 text-[11px] max-w-full"
-                        >
-                          {att.previewUrl ? (
-                            <img
-                              src={att.previewUrl}
-                              alt={att.name}
-                              className="size-8 object-cover border border-edge shrink-0 bg-muted"
-                            />
-                          ) : (
-                            <FileIcon className="size-3.5 text-primary shrink-0" />
-                          )}
-                          <span className="font-mono truncate max-w-[160px] text-foreground">
-                            {att.name}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    msg.attachmentName && (
-                      <div className="mt-1 font-mono uppercase text-[11px] text-primary">
-                        Attached: {msg.attachmentName}
+            {messages.map((msg, index) => {
+              if (msg.role === "user") {
+                return (
+                  <div
+                    key={msg.id}
+                    className="self-end max-w-[88%] border border-edge bg-card px-3.5 py-2 text-[13.5px] leading-relaxed text-foreground"
+                  >
+                    <div>{msg.content}</div>
+                    {msg.attachments && msg.attachments.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {msg.attachments.map((att, idx) => (
+                          <div
+                            key={`${att.name}-${idx}`}
+                            className="flex items-center gap-1.5 border border-edge bg-background px-1.5 py-1 text-[11px] max-w-full"
+                          >
+                            {att.previewUrl ? (
+                              <img
+                                src={att.previewUrl}
+                                alt={att.name}
+                                className="size-8 object-cover border border-edge shrink-0 bg-muted"
+                              />
+                            ) : (
+                              <FileIcon className="size-3.5 text-primary shrink-0" />
+                            )}
+                            <span className="font-mono truncate max-w-[160px] text-foreground">
+                              {att.name}
+                            </span>
+                          </div>
+                        ))}
                       </div>
-                    )
-                  )}
-                  <div className="mt-1.5 flex items-center justify-end gap-2.5 opacity-80 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                    <button
-                      type="button"
-                      onClick={() => handleCopyMessage(msg.id, msg.content)}
-                      title="Copy message"
-                      className="text-[11px] font-mono text-muted-foreground hover:text-foreground inline-flex items-center gap-1 cursor-pointer transition-colors"
-                    >
-                      {copiedMessageId === msg.id ? (
-                        <>
-                          <Check className="size-3 text-primary" />
-                          <span className="text-primary font-medium">Copied</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="size-3" />
-                          <span>Copy</span>
-                        </>
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleEditMessage(msg.content)}
-                      title="Edit message"
-                      className="text-[11px] font-mono text-muted-foreground hover:text-foreground inline-flex items-center gap-1 cursor-pointer transition-colors"
-                    >
-                      <Pencil className="size-3" />
-                      <span>Edit</span>
-                    </button>
+                    ) : (
+                      msg.attachmentName && (
+                        <div className="mt-1 font-mono uppercase text-[11px] text-primary">
+                          Attached: {msg.attachmentName}
+                        </div>
+                      )
+                    )}
                   </div>
-                </div>
-              ) : (
+                );
+              }
+
+              const targetVersion = msg.version ?? getMessageVersion(msg, index);
+              const prevUserMsg = messages
+                .slice(0, index)
+                .reverse()
+                .find((m) => m.role === "user");
+              const textToCopy = prevUserMsg?.content || msg.content;
+
+              return (
                 <div key={msg.id} className="flex flex-col gap-2">
                   <div className="flex items-center justify-between gap-1 font-mono uppercase text-[11px] text-muted-foreground w-full">
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 min-w-0">
                       <img
                         src="/assets/emdash-logo.png"
                         alt="Emdash"
                         className="size-4 object-cover shrink-0"
                       />
                       {msg.status === "thinking" ? (
-                        <span className="inline-flex items-center gap-1.5 text-primary">
-                          <Loader2 className="size-3.5 animate-spin" />
-                          <span>{STAGE_LABELS[msg.stage ?? "brief"]}</span>
+                        <span className="inline-flex items-center gap-1.5 text-primary truncate">
+                          <Loader2 className="size-3.5 animate-spin shrink-0" />
+                          <span className="truncate">
+                            {STAGE_LABELS[msg.stage ?? "brief"]}
+                          </span>
                         </span>
                       ) : msg.status === "error" ? (
-                        <span className="inline-flex items-center gap-1.5 text-destructive font-medium">
-                          <AlertCircle className="size-3.5" />
-                          <span>
+                        <span className="inline-flex items-center gap-1.5 text-destructive font-medium truncate">
+                          <AlertCircle className="size-3.5 shrink-0" />
+                          <span className="truncate">
                             {msg.content === "Generation paused by user."
                               ? "Generation paused"
                               : "Generation failed"}
                           </span>
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5">
-                          <CheckCircle2 className="size-3.5 text-primary" />
+                        <span className="inline-flex items-center gap-1.5 truncate">
+                          <CheckCircle2 className="size-3.5 text-primary shrink-0" />
                           <span className="tabular-nums">
                             Built in {msg.elapsedSeconds ?? 2}s
                           </span>
                         </span>
                       )}
                     </div>
-                    {msg.status === "thinking" && onPause && (
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      {msg.status === "thinking" && onPause && (
+                        <button
+                          type="button"
+                          onClick={onPause}
+                          title="Pause generation"
+                          aria-label="Pause generation"
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-mono border border-edge bg-background hover:bg-muted text-muted-foreground hover:text-destructive cursor-pointer transition-colors"
+                        >
+                          <Square className="size-2.5 fill-current" />
+                          <span>Pause</span>
+                        </button>
+                      )}
                       <button
                         type="button"
-                        onClick={onPause}
-                        title="Pause generation"
-                        className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-mono border border-edge bg-background hover:bg-muted text-muted-foreground hover:text-destructive cursor-pointer transition-colors"
+                        onClick={() => handleCopyMessage(msg.id, textToCopy)}
+                        title={copiedMessageId === msg.id ? "Copied" : "Copy"}
+                        aria-label="Copy"
+                        className="size-6 border border-edge/60 bg-background hover:bg-muted text-muted-foreground hover:text-foreground grid place-items-center transition-colors cursor-pointer"
                       >
-                        <Square className="size-2.5 fill-current" />
-                        <span>Pause</span>
+                        {copiedMessageId === msg.id ? (
+                          <Check className="size-3 text-primary" />
+                        ) : (
+                          <Copy className="size-3" />
+                        )}
                       </button>
-                    )}
+                      {targetVersion ? (
+                        <button
+                          type="button"
+                          onClick={() => handleRevertToVersion(targetVersion, msg.id)}
+                          title={`Revert to Version ${targetVersion}`}
+                          aria-label={`Revert to Version ${targetVersion}`}
+                          className="size-6 border border-edge/60 bg-background hover:bg-muted text-muted-foreground hover:text-foreground grid place-items-center transition-colors cursor-pointer"
+                        >
+                          {revertedMessageId === msg.id ? (
+                            <Check className="size-3 text-primary" />
+                          ) : (
+                            <RotateCcw className="size-3" />
+                          )}
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
 
                   {msg.status === "thinking" && !isPro && (
@@ -660,38 +711,16 @@ export function WorkspaceView({
                   )}
 
                   {msg.content && (
-                    <div className="group relative">
-                      <p
-                        className={cn(
-                          "text-[13.5px] leading-relaxed",
-                          msg.status === "error"
-                            ? "text-destructive"
-                            : "text-foreground"
-                        )}
-                      >
-                        {msg.content}
-                      </p>
-                      <div className="mt-1 flex items-center justify-end opacity-80 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                        <button
-                          type="button"
-                          onClick={() => handleCopyMessage(msg.id, msg.content)}
-                          title="Copy response"
-                          className="text-[11px] font-mono text-muted-foreground hover:text-foreground inline-flex items-center gap-1 cursor-pointer transition-colors"
-                        >
-                          {copiedMessageId === msg.id ? (
-                            <>
-                              <Check className="size-3 text-primary" />
-                              <span className="text-primary font-medium">Copied</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="size-3" />
-                              <span>Copy</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
+                    <p
+                      className={cn(
+                        "text-[13.5px] leading-relaxed",
+                        msg.status === "error"
+                          ? "text-destructive"
+                          : "text-foreground"
+                      )}
+                    >
+                      {msg.content}
+                    </p>
                   )}
 
                   {msg.version && (
@@ -713,8 +742,8 @@ export function WorkspaceView({
                     </button>
                   )}
                 </div>
-              )
-            )}
+              );
+            })}
             <div ref={messagesEndRef} />
           </div>
 
@@ -849,9 +878,9 @@ export function WorkspaceView({
                     onClick={onPause}
                     aria-label="Pause generation"
                     title="Pause generation"
-                    className="size-8 shrink-0 bg-destructive text-destructive-foreground grid place-items-center transition-all hover:bg-destructive/85 active:scale-95 cursor-pointer shadow-sm"
+                    className="size-8 shrink-0 border border-destructive bg-destructive text-destructive-foreground grid place-items-center transition-all hover:bg-destructive/85 active:scale-95 cursor-pointer"
                   >
-                    <Square className="size-3.5 fill-current" />
+                    <Square className="size-3 fill-current" />
                   </button>
                 ) : (
                   <button
@@ -859,9 +888,9 @@ export function WorkspaceView({
                     onClick={handleSend}
                     disabled={!followUp.trim() && attachments.length === 0}
                     aria-label="Send"
-                    className="size-8 shrink-0 bg-primary text-primary-foreground grid place-items-center transition-all hover:bg-primary/85 active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                    className="size-8 shrink-0 border border-primary bg-primary text-primary-foreground grid place-items-center transition-all hover:bg-primary/85 active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
                   >
-                    <ArrowUp className="size-4" />
+                    <ArrowUp className="size-3.5" />
                   </button>
                 )}
               </div>
@@ -1204,6 +1233,27 @@ export function WorkspaceView({
         </section>
       </div>
 
+      {statusToast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-4 left-4 z-50 flex items-center gap-2.5 border border-edge bg-card px-3.5 py-2.5 text-xs shadow-lg max-w-sm"
+        >
+          <RotateCcw className="size-3.5 text-primary shrink-0" />
+          <span className="text-foreground font-mono font-medium">
+            {statusToast}
+          </span>
+          <button
+            type="button"
+            onClick={() => setStatusToast(null)}
+            aria-label="Dismiss notice"
+            className="text-muted-foreground hover:text-foreground cursor-pointer shrink-0 ml-auto"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      )}
+
       {publishToastOpen && (
         <div
           role="status"
@@ -1214,7 +1264,7 @@ export function WorkspaceView({
             Coming soon
           </span>
           <span className="text-foreground">
-            Publish is coming soon. Use Export .zip to download all project files.
+            Publish is coming soon. Use Export to download all project files.
           </span>
           <button
             type="button"
