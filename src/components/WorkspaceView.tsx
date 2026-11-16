@@ -880,7 +880,7 @@ export function WorkspaceView({
                     title="Pause generation"
                     className="size-8 shrink-0 border border-destructive bg-destructive text-destructive-foreground grid place-items-center transition-all hover:bg-destructive/85 active:scale-95 cursor-pointer"
                   >
-                    <Square className="size-3 fill-current" />
+                    <Square className="size-3.5 fill-current" />
                   </button>
                 ) : (
                   <button
