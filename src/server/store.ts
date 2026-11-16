@@ -273,28 +273,35 @@ export class LocalAppStore implements LlmRouterStore {
 
   private persistToDisk() {
     if (!this.persistPath) return;
-    const dir = path.dirname(this.persistPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    try {
+      const dir = path.dirname(this.persistPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      const snapshot: PersistedSnapshot = {
+        config: this.config,
+        profiles: Array.from(this.profiles.values()),
+        wallets: Array.from(this.wallets.values()),
+        coin_ledger: this.coinLedger,
+        jobs: Array.from(this.jobs.values()),
+        providers: Array.from(this.providers.values()).map((p) => ({
+          ...p,
+          api_key_enc: typeof p.api_key_enc === "string" ? p.api_key_enc : Buffer.from(p.api_key_enc).toString("base64"),
+        })),
+        provider_models: Array.from(this.providerModels.values()),
+        routes: Array.from(this.routes.values()),
+        provider_health: Array.from(this.providerHealth.values()),
+        llm_calls: this.llmCalls,
+        llm_daily: this.llmDaily,
+        audit_log: this.auditLog,
+      };
+      fs.writeFileSync(this.persistPath, JSON.stringify(snapshot, null, 2), "utf8");
+    } catch (err) {
+      console.warn(
+        "[emdash] Store disk persistence skipped:",
+        err instanceof Error ? err.message : String(err)
+      );
     }
-    const snapshot: PersistedSnapshot = {
-      config: this.config,
-      profiles: Array.from(this.profiles.values()),
-      wallets: Array.from(this.wallets.values()),
-      coin_ledger: this.coinLedger,
-      jobs: Array.from(this.jobs.values()),
-      providers: Array.from(this.providers.values()).map((p) => ({
-        ...p,
-        api_key_enc: typeof p.api_key_enc === "string" ? p.api_key_enc : Buffer.from(p.api_key_enc).toString("base64"),
-      })),
-      provider_models: Array.from(this.providerModels.values()),
-      routes: Array.from(this.routes.values()),
-      provider_health: Array.from(this.providerHealth.values()),
-      llm_calls: this.llmCalls,
-      llm_daily: this.llmDaily,
-      audit_log: this.auditLog,
-    };
-    fs.writeFileSync(this.persistPath, JSON.stringify(snapshot, null, 2), "utf8");
   }
 
   // ---- Profiles & Auth ----
@@ -1061,20 +1068,33 @@ export class LocalAppStore implements LlmRouterStore {
   }
 }
 
+let ephemeralMasterSecret: string | null = null;
+
 export function resolveServerMasterSecret(dataDir = path.resolve(process.cwd(), ".data")): string {
   const envSecret = process.env.KEY_ENCRYPTION_SECRET?.trim();
   if (envSecret) return envSecret;
 
   const keyFile = path.join(dataDir, "local-master.key");
-  if (fs.existsSync(keyFile)) {
-    const saved = fs.readFileSync(keyFile, "utf8").trim();
-    if (saved) return saved;
+  try {
+    if (fs.existsSync(keyFile)) {
+      const saved = fs.readFileSync(keyFile, "utf8").trim();
+      if (saved) return saved;
+    }
+  } catch {
+    // ignore read failure on read-only/ephemeral FS
   }
 
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
+  if (ephemeralMasterSecret) return ephemeralMasterSecret;
+
   const generated = crypto.randomBytes(32).toString("base64");
-  fs.writeFileSync(keyFile, generated, { mode: 0o600 });
+  ephemeralMasterSecret = generated;
+  try {
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    fs.writeFileSync(keyFile, generated, { mode: 0o600 });
+  } catch {
+    // Vercel / read-only filesystem: keep ephemeral secret in memory without crashing
+  }
   return generated;
 }

@@ -385,5 +385,36 @@ describe("admin security, MFA aal2, secret hygiene, RLS, and coin refunds", () =
     expect(pubConfig.status).toBe(200);
     expect(Object.keys(pubConfig.json).sort()).toEqual(["supabaseAnonKey", "supabaseUrl"]);
   });
+
+  it("never fails with 500 on read-only filesystems (Vercel serverless EROFS regression)", async () => {
+    const { resolveServerMasterSecret } = await import("./store.ts");
+    const readOnlyDir = path.join("/dev/null", "readonly-emdash-dir");
+    const secret = resolveServerMasterSecret(readOnlyDir);
+    expect(typeof secret).toBe("string");
+    expect(secret.length).toBeGreaterThan(20);
+
+    const store = new LocalAppStore({
+      persistPath: path.join(readOnlyDir, "emdash-store.json"),
+    });
+    const { app } = createApp({ store, masterSecret: secret });
+    const server = await new Promise<http.Server>((resolve) => {
+      const s = app.listen(0, "127.0.0.1", () => resolve(s));
+    });
+    openServers.push(server);
+    const addr = server.address();
+    if (!addr || typeof addr === "string") throw new Error("Expected numeric port");
+
+    const signup = await apiJson(`http://127.0.0.1:${addr.port}`, "/api/auth/session", {
+      method: "POST",
+      body: {
+        email: "vercel@example.com",
+        name: "Vercel Builder",
+        password: "password123",
+        mode: "signup",
+      },
+    });
+    expect(signup.status).toBe(200);
+    expect(signup.json.token).toBeTruthy();
+  });
 });
 

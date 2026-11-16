@@ -250,7 +250,7 @@ export function Footer({
         {/* Bottom Copyright & Social Icons Bar */}
         <div className="border-t border-edge px-4 sm:px-6 md:px-10 py-4 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
           <p className="tabular-nums">
-            &copy; {currentYear} Emdash. All rights reserved.
+            &copy; {currentYear} Emdash.
           </p>
 
           <nav aria-label="Social media" className="flex items-center gap-1.5">

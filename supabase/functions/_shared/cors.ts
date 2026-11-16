@@ -1,20 +1,26 @@
 // Origin-locked CORS helper for Supabase Edge Functions
 
-export function getAllowedOrigin(): string {
-  const configured =
-    Deno.env.get("SITE_ORIGIN") ||
-    Deno.env.get("APP_URL") ||
-    "http://localhost:3000";
-  return configured.replace(/\/+$/, "");
+export function getAllowedOrigins(): string[] {
+  const raw = [
+    Deno.env.get("SITE_ORIGIN") || "",
+    Deno.env.get("APP_URL") || "",
+    "https://emdashworld.vercel.app",
+    "http://localhost:3000",
+  ]
+    .join(",")
+    .split(",")
+    .map((s) => s.trim().replace(/\/+$/, ""))
+    .filter(Boolean);
+  return Array.from(new Set(raw));
 }
 
 export function buildCorsHeaders(req: Request): Record<string, string> {
-  const allowedOrigin = getAllowedOrigin();
+  const allowedOrigins = getAllowedOrigins();
   const requestOrigin = (req.headers.get("origin") || "").replace(/\/+$/, "");
   const originToReflect =
-    requestOrigin && requestOrigin === allowedOrigin
+    requestOrigin && allowedOrigins.includes(requestOrigin)
       ? requestOrigin
-      : allowedOrigin;
+      : allowedOrigins[0] || "http://localhost:3000";
 
   return {
     "Access-Control-Allow-Origin": originToReflect,

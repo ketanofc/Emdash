@@ -126,41 +126,53 @@ export async function resolveAuthenticatedUser(
   }
 
   // Fallback: verify Supabase JWT if Supabase is configured on the server
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-  const serviceKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
+  const supabaseUrl = (
+    process.env.VITE_SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.SUPABASE_URL ||
+    ""
+  ).trim();
+  const serviceKey = (
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SECRET_KEY ||
+    ""
+  ).trim();
   if (supabaseUrl && serviceKey) {
-    const supabaseAdmin = createClient(supabaseUrl, serviceKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data, error } = await supabaseAdmin.auth.getUser(token);
-    if (!error && data?.user) {
-      const { data: dbProfile } = await supabaseAdmin
-        .from("profiles")
-        .select("*")
-        .eq("user_id", data.user.id)
-        .single();
-      if (!dbProfile) {
-        return { ok: false, status: 403, error: "Profile not found." };
+    try {
+      const supabaseAdmin = createClient(supabaseUrl, serviceKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const { data, error } = await supabaseAdmin.auth.getUser(token);
+      if (!error && data?.user) {
+        const { data: dbProfile } = await supabaseAdmin
+          .from("profiles")
+          .select("*")
+          .eq("user_id", data.user.id)
+          .maybeSingle();
+        if (!dbProfile) {
+          return { ok: false, status: 403, error: "Profile not found." };
+        }
+        return {
+          ok: true,
+          userId: data.user.id,
+          email: data.user.email || "",
+          aal: decodeJwtAal(token),
+          profile: {
+            user_id: dbProfile.user_id,
+            email: dbProfile.email,
+            name: dbProfile.email.split("@")[0] || "Builder",
+            role: dbProfile.role === "admin" ? "admin" : "user",
+            status: dbProfile.status === "suspended" ? "suspended" : "active",
+            country: dbProfile.country,
+            last_seen_at: dbProfile.last_seen_at,
+            created_at: dbProfile.created_at,
+          },
+          country: country || dbProfile.country,
+          ip,
+        };
       }
-      return {
-        ok: true,
-        userId: data.user.id,
-        email: data.user.email || "",
-        aal: decodeJwtAal(token),
-        profile: {
-          user_id: dbProfile.user_id,
-          email: dbProfile.email,
-          name: dbProfile.email.split("@")[0] || "Builder",
-          role: dbProfile.role === "admin" ? "admin" : "user",
-          status: dbProfile.status === "suspended" ? "suspended" : "active",
-          country: dbProfile.country,
-          last_seen_at: dbProfile.last_seen_at,
-          created_at: dbProfile.created_at,
-        },
-        country: country || dbProfile.country,
-        ip,
-      };
+    } catch (err) {
+      console.error("[emdash] Supabase JWT verification error:", err);
     }
   }
 

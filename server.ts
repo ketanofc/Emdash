@@ -2,6 +2,7 @@ import "dotenv/config";
 import crypto from "node:crypto";
 import express from "express";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createAdminRouter, createAuthRouter, type ServerContext } from "./src/server/adminRouter.ts";
@@ -33,9 +34,14 @@ function sanitizeSlug(raw: string): string {
 }
 
 function getAllowedOrigins(): Set<string> {
+  const vercelUrl = process.env.VERCEL_URL?.trim();
+  const vercelProdUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
   const candidates = [
     process.env.SITE_ORIGIN,
     process.env.APP_URL,
+    vercelProdUrl ? `https://${vercelProdUrl.replace(/^https?:\/\//, "")}` : "",
+    vercelUrl ? `https://${vercelUrl.replace(/^https?:\/\//, "")}` : "",
+    "https://emdashworld.vercel.app",
     `http://localhost:${PORT}`,
     `http://127.0.0.1:${PORT}`,
   ]
@@ -44,8 +50,23 @@ function getAllowedOrigins(): Set<string> {
   return new Set(candidates);
 }
 
+function resolveSigningSecret(masterSecret: string): string {
+  const explicit = process.env.SESSION_SIGNING_SECRET?.trim();
+  if (explicit) return explicit;
+  const keySecret = process.env.KEY_ENCRYPTION_SECRET?.trim();
+  if (keySecret) return crypto.createHash("sha256").update(keySecret).digest("hex");
+  const serviceSecret = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY)?.trim();
+  if (serviceSecret) {
+    return crypto.createHmac("sha256", serviceSecret).update("emdash:session-signing:v1").digest("hex");
+  }
+  return crypto.createHash("sha256").update(masterSecret).digest("hex");
+}
+
 export function createApp(customCtx?: Partial<ServerContext>) {
-  const dataDir = path.resolve(__dirname, ".data");
+  const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+  const dataDir = isServerless
+    ? path.join(os.tmpdir(), "emdash-data")
+    : path.resolve(__dirname, ".data");
   const store =
     customCtx?.store ??
     new LocalAppStore({
@@ -55,9 +76,7 @@ export function createApp(customCtx?: Partial<ServerContext>) {
           : path.join(dataDir, "emdash-store.json"),
     });
   const masterSecret = customCtx?.masterSecret ?? resolveServerMasterSecret(dataDir);
-  const signingSecret =
-    customCtx?.signingSecret ??
-    (process.env.SESSION_SIGNING_SECRET?.trim() || crypto.createHash("sha256").update(masterSecret).digest("hex"));
+  const signingSecret = customCtx?.signingSecret ?? resolveSigningSecret(masterSecret);
 
   const ctx: ServerContext = {
     store,
@@ -159,6 +178,15 @@ export function createApp(customCtx?: Partial<ServerContext>) {
     res.type("html").send(site.html);
   });
 
+  expressApp.use(
+    (err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+      console.error("[emdash] Unhandled server error:", err);
+      if (res.headersSent) return;
+      const message = err instanceof Error ? err.message : "Internal server error.";
+      res.status(500).json({ error: message });
+    }
+  );
+
   return { app: expressApp, ctx };
 }
 
@@ -170,7 +198,8 @@ async function startServer() {
   }
 
   if (!isProd) {
-    const { createServer: createViteServer } = await import("vite");
+    const vitePkg = "vite";
+    const { createServer: createViteServer } = await import(/* @vite-ignore */ vitePkg);
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
