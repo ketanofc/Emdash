@@ -24,8 +24,27 @@ export interface ProfileRecord {
   country: string | null;
   last_seen_at: string;
   created_at: string;
+  password_hash?: string | null;
   totp_secret?: string | null;
   totp_verified?: boolean;
+}
+
+export function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const derived = crypto.scryptSync(password, salt, 64).toString("hex");
+  return `${salt}:${derived}`;
+}
+
+export function verifyPassword(password: string, storedHash: string): boolean {
+  const [salt, keyHex] = storedHash.split(":");
+  if (!salt || !keyHex) return false;
+  try {
+    const expected = Buffer.from(keyHex, "hex");
+    const derived = crypto.scryptSync(password, salt, expected.length);
+    return expected.length === derived.length && crypto.timingSafeEqual(expected, derived);
+  } catch {
+    return false;
+  }
 }
 
 export interface WalletRecord {
@@ -279,17 +298,29 @@ export class LocalAppStore implements LlmRouterStore {
   }
 
   // ---- Profiles & Auth ----
+  getProfileByEmail(email: string): ProfileRecord | null {
+    const emailNorm = email.trim().toLowerCase();
+    for (const p of this.profiles.values()) {
+      if (p.email.toLowerCase() === emailNorm) {
+        return { ...p };
+      }
+    }
+    return null;
+  }
+
   ensureProfile(input: {
     userId?: string;
     email: string;
     name?: string;
     country?: string | null;
+    passwordHash?: string | null;
   }): { created: boolean; profile: ProfileRecord } {
     const emailNorm = input.email.trim().toLowerCase();
     for (const p of this.profiles.values()) {
       if (p.email.toLowerCase() === emailNorm || (input.userId && p.user_id === input.userId)) {
         p.last_seen_at = new Date(this.nowFn()).toISOString();
         if (input.country) p.country = input.country;
+        if (input.passwordHash && !p.password_hash) p.password_hash = input.passwordHash;
         this.persistToDisk();
         return { created: false, profile: { ...p } };
       }
@@ -310,6 +341,7 @@ export class LocalAppStore implements LlmRouterStore {
       country: input.country ?? null,
       last_seen_at: nowIso,
       created_at: nowIso,
+      password_hash: input.passwordHash ?? null,
       totp_secret: null,
       totp_verified: false,
     };

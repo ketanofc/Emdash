@@ -332,4 +332,58 @@ describe("admin security, MFA aal2, secret hygiene, RLS, and coin refunds", () =
     // Verify no permissive policies exist for anon or authenticated on those tables
     expect(migrationSql).not.toMatch(/\bcreate\s+policy\b/i);
   });
+
+  it("enforces unified signup/signin password checks and /api/public-config never exposes secrets", async () => {
+    const { server, baseUrl } = await startTestServer();
+    openServers.push(server);
+
+    const signup = await apiJson(baseUrl, "/api/auth/session", {
+      method: "POST",
+      body: {
+        email: "unified@example.com",
+        name: "Unified User",
+        password: "password123",
+        mode: "signup",
+      },
+    });
+    expect(signup.status).toBe(200);
+    expect(signup.json.user.email).toBe("unified@example.com");
+
+    const dupSignup = await apiJson(baseUrl, "/api/auth/session", {
+      method: "POST",
+      body: {
+        email: "unified@example.com",
+        name: "Unified User",
+        password: "password123",
+        mode: "signup",
+      },
+    });
+    expect(dupSignup.status).toBe(409);
+
+    const wrongSignin = await apiJson(baseUrl, "/api/auth/session", {
+      method: "POST",
+      body: {
+        email: "unified@example.com",
+        password: "wrong-password",
+        mode: "signin",
+      },
+    });
+    expect(wrongSignin.status).toBe(401);
+
+    const goodSignin = await apiJson(baseUrl, "/api/auth/session", {
+      method: "POST",
+      body: {
+        email: "unified@example.com",
+        password: "password123",
+        mode: "signin",
+      },
+    });
+    expect(goodSignin.status).toBe(200);
+    expect(goodSignin.json.token).toBeTruthy();
+
+    const pubConfig = await apiJson(baseUrl, "/api/public-config");
+    expect(pubConfig.status).toBe(200);
+    expect(Object.keys(pubConfig.json).sort()).toEqual(["supabaseAnonKey", "supabaseUrl"]);
+  });
 });
+

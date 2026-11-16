@@ -198,7 +198,12 @@ export async function signInAccount(params: {
 
   const res = await apiFetch<{ token: string; user: UserSession }>("/api/auth/session", {
     method: "POST",
-    body: JSON.stringify({ email: params.email, name: params.name }),
+    body: JSON.stringify({
+      email: params.email,
+      name: params.name,
+      password: params.password,
+      mode: params.mode,
+    }),
   });
   setLocalSessionToken(res.token);
   return { status: "signed_in", user: res.user };

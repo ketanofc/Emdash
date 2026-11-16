@@ -10,7 +10,9 @@ import { testProviderConnection } from "../lib/llm/adapters.ts";
 import type { RouteStage } from "../lib/llm/types.ts";
 import {
   generateTotpSecret,
+  hashPassword,
   LocalAppStore,
+  verifyPassword,
   verifyTotpCode,
   type ProfileRecord,
 } from "./store.ts";
@@ -211,19 +213,52 @@ export function createAuthRouter(ctx: ServerContext): express.Router {
   const router = express.Router();
 
   router.post("/session", async (req, res) => {
-    const body = (req.body || {}) as { email?: string; name?: string };
+    const body = (req.body || {}) as {
+      email?: string;
+      name?: string;
+      password?: string;
+      mode?: "signin" | "signup";
+    };
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     if (!email || !email.includes("@")) {
       res.status(400).json({ error: "Valid email is required." });
       return;
     }
+    const mode = body.mode;
+    const password = typeof body.password === "string" ? body.password : "";
+    if (mode && password.length < 6) {
+      res.status(400).json({ error: "Password must be at least 6 characters." });
+      return;
+    }
+
     const country =
       typeof req.headers["cf-ipcountry"] === "string" ? req.headers["cf-ipcountry"] : null;
     try {
+      const existing = ctx.store.getProfileByEmail(email);
+
+      if (mode === "signup") {
+        if (existing) {
+          res.status(409).json({
+            error: "An account with this email already exists. Please sign in instead.",
+          });
+          return;
+        }
+      } else if (mode === "signin") {
+        if (!existing) {
+          res.status(401).json({ error: "Invalid email or password." });
+          return;
+        }
+        if (existing.password_hash && !verifyPassword(password, existing.password_hash)) {
+          res.status(401).json({ error: "Invalid email or password." });
+          return;
+        }
+      }
+
       const { profile } = ctx.store.ensureProfile({
         email,
         name: body.name,
         country,
+        passwordHash: password.length >= 6 ? hashPassword(password) : null,
       });
       const token = signSessionToken(
         {
@@ -661,7 +696,7 @@ export function createAdminRouter(ctx: ServerContext): express.Router {
       res.status(404).json({ error: "User not found." });
       return;
     }
-    const { totp_secret: _omit, ...safeProfile } = profile;
+    const { totp_secret: _omitTotp, password_hash: _omitPw, ...safeProfile } = profile;
     const wallet = ctx.store.getWallet(profile.user_id);
     const ledger = ctx.store.getUserLedger(profile.user_id);
     const jobs = ctx.store.getUserJobs(profile.user_id);

@@ -196,17 +196,11 @@ export function AuthDialog({
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const [supabaseActive, setSupabaseActive] = useState(() => isSupabaseConfigured());
-
   useEffect(() => {
-    if (open && !supabaseActive) {
-      void hydrateSupabaseConfig().then((ok) => {
-        if (ok) setSupabaseActive(true);
-      });
-    } else if (open) {
-      setSupabaseActive(isSupabaseConfigured());
+    if (open && !isSupabaseConfigured()) {
+      void hydrateSupabaseConfig();
     }
-  }, [open, supabaseActive]);
+  }, [open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -215,7 +209,7 @@ export function AuthDialog({
       setFormError("Enter a valid email address");
       return;
     }
-    if (supabaseActive && password.length < 6) {
+    if (password.length < 6) {
       setFormError("Password must be at least 6 characters");
       return;
     }
@@ -362,21 +356,19 @@ export function AuthDialog({
                   className="h-9 border border-edge bg-background px-3 text-sm outline-none focus-visible:border-primary"
                 />
               </label>
-              {supabaseActive && (
-                <label className="grid gap-1.5">
-                  <span className="font-mono uppercase text-[11px] text-muted-foreground">
-                    Password
-                  </span>
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="h-9 border border-edge bg-background px-3 text-sm outline-none focus-visible:border-primary"
-                  />
-                </label>
-              )}
+              <label className="grid gap-1.5">
+                <span className="font-mono uppercase text-[11px] text-muted-foreground">
+                  Password
+                </span>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="h-9 border border-edge bg-background px-3 text-sm outline-none focus-visible:border-primary"
+                />
+              </label>
               {infoMessage && (
                 <div className="border border-primary/40 bg-primary/5 px-2.5 py-2 text-xs font-mono text-primary">
                   {infoMessage}
