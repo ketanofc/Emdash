@@ -6,14 +6,11 @@ import type {
   GeneratedFiles,
   PipelineStage,
 } from "../types.ts";
-import { loadEncryptedApiKey } from "./storage.ts";
 
 export const FALLBACK_GEMINI_MODEL = "gemini-3.5-flash-lite";
 const REQUEST_TIMEOUT_MS = 60_000;
 const PIPELINE_TIMEOUT_MS = 180_000;
 const DEFAULT_RATE_LIMIT_BACKOFF_MS = 1200;
-const DEPRECATED_MODEL_RE = /^gemini-(?:1\.|2\.0|pro\b)/i;
-const GEMINI_4_MODEL_RE = /^gemini-4-/i;
 
 export const DEFAULT_GEMINI_MODELS: GeminiModelOption[] = [
   { id: "gemini-3.5-flash", displayName: "Gemini 3.5 Flash" },
@@ -27,6 +24,9 @@ export type GeminiErrorCode =
   | "RATE_LIMIT"
   | "INVALID_KEY"
   | "MISSING_KEY"
+  | "HIGH_DEMAND"
+  | "INSUFFICIENT_COINS"
+  | "SUSPENDED"
   | "NETWORK"
   | "TIMEOUT"
   | "MALFORMED"
@@ -48,6 +48,7 @@ export interface GeminiRequestOptions {
   model: string;
   system: string;
   prompt: string;
+  stage?: "brief" | "plan" | "build" | "repair";
   schema?: Record<string, unknown>;
   temperature?: number;
   attachments?: AttachedFile[];
@@ -61,6 +62,7 @@ export interface PipelineStreamOptions {
   runtimeErrors?: string[];
   attachments?: AttachedFile[];
   signal?: AbortSignal;
+  authHeaders?: Record<string, string>;
 }
 
 export interface PipelineStreamResult {
@@ -68,6 +70,7 @@ export interface PipelineStreamResult {
   plan: BuildPlan;
   files: GeneratedFiles;
   summary: string;
+  walletBalance?: number;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -77,33 +80,6 @@ function sleep(ms: number): Promise<void> {
 function normalizeModelId(model: string): string {
   const clean = model.trim().replace(/^models\//, "");
   return clean || FALLBACK_GEMINI_MODEL;
-}
-
-function buildContents(prompt: string, attachments?: AttachedFile[]) {
-  const parts: Array<
-    { text: string } | { inlineData: { mimeType: string; data: string } }
-  > = [];
-
-  if (Array.isArray(attachments) && attachments.length > 0) {
-    for (const file of attachments.slice(0, 4)) {
-      if (!file || typeof file !== "object") continue;
-      if ((file.kind === "image" || file.kind === "inline") && file.base64Data) {
-        parts.push({
-          inlineData: {
-            mimeType: file.mimeType || "application/octet-stream",
-            data: file.base64Data,
-          },
-        });
-      } else if (file.kind === "text" && file.content) {
-        parts.push({
-          text: `Attached file (${file.name || "attachment"}):\n${file.content.slice(0, 12000)}`,
-        });
-      }
-    }
-  }
-
-  parts.push({ text: prompt });
-  return { parts };
 }
 
 async function fetchWithTimeout(
@@ -121,11 +97,7 @@ async function fetchWithTimeout(
     }
   }
   try {
-    const savedKey = await loadEncryptedApiKey();
     const headers = new Headers(init.headers || {});
-    if (savedKey && !headers.has("x-goog-api-key")) {
-      headers.set("x-goog-api-key", savedKey);
-    }
     return await fetch(url, { ...init, headers, signal: controller.signal });
   } catch (err: unknown) {
     if (init.signal?.aborted) {
@@ -135,10 +107,7 @@ async function fetchWithTimeout(
       (err instanceof DOMException && err.name === "AbortError") ||
       (err instanceof Error && err.name === "AbortError")
     ) {
-      throw new GeminiError(
-        "TIMEOUT",
-        "Request timed out. Please try again."
-      );
+      throw new GeminiError("TIMEOUT", "Request timed out. Please try again.");
     }
     throw new GeminiError(
       "NETWORK",
@@ -173,23 +142,28 @@ function mapStatusToError(
   if (status === 429 || detail.code === "RATE_LIMIT") {
     return new GeminiError(
       "RATE_LIMIT",
-      detail.message || "API rate limit reached (429). Please wait a moment and try again.",
+      detail.message || "High demand right now, please try again later",
       429
     );
   }
-  if (status === 503 || detail.code === "MISSING_KEY") {
+  if (status === 402 || detail.code === "INSUFFICIENT_COINS") {
     return new GeminiError(
-      "MISSING_KEY",
-      detail.message ||
-        "API key is not configured. Open Settings > Models to connect your API key.",
+      "INSUFFICIENT_COINS",
+      detail.message || "Insufficient Dash Coins for this build.",
+      402
+    );
+  }
+  if (detail.code === "HIGH_DEMAND" || status === 503 || detail.code === "MISSING_KEY") {
+    return new GeminiError(
+      detail.code ?? "HIGH_DEMAND",
+      detail.message || "High demand right now, please try again later",
       status
     );
   }
   if (status === 400 || status === 401 || status === 403 || detail.code === "INVALID_KEY") {
     return new GeminiError(
-      "INVALID_KEY",
-      detail.message ||
-        "Your API key was rejected (400/401/403). Please verify your API key above and click Test Key.",
+      detail.code ?? "INVALID_KEY",
+      detail.message || "Request rejected by server.",
       status
     );
   }
@@ -253,206 +227,13 @@ export function pickDefaultFlashModel(models: GeminiModelOption[]): string {
   return generalFlash?.id ?? anyFlash?.id ?? models[0]?.id ?? FALLBACK_GEMINI_MODEL;
 }
 
-export async function fetchDirectGeminiModels(apiKey: string): Promise<GeminiModelOption[]> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
-  try {
-    const res = await fetch(url);
-    if (!res.ok) {
-      if (res.status === 400 || res.status === 401 || res.status === 403) {
-        throw new GeminiError(
-          "INVALID_KEY",
-          "Your API key was rejected (400/401/403). Please verify your API key above and click Test Key.",
-          res.status
-        );
-      }
-      if (res.status === 429) {
-        throw new GeminiError(
-          "RATE_LIMIT",
-          "API rate limit reached (429). Please wait a moment and try again.",
-          429
-        );
-      }
-      throw new GeminiError(
-        `GEMINI_${res.status}`,
-        `Google API request failed with status ${res.status}.`,
-        res.status
-      );
-    }
-
-    const data = (await res.json()) as {
-      models?: Array<{
-        name?: string;
-        displayName?: string;
-        description?: string;
-        supportedGenerationMethods?: string[];
-      }>;
-    };
-
-    const rawList = Array.isArray(data.models) ? data.models : [];
-    const list: GeminiModelOption[] = [];
-    for (const m of rawList) {
-      if (!m.name) continue;
-      const id = m.name.replace(/^models\//, "");
-      if (!id || DEPRECATED_MODEL_RE.test(id)) continue;
-      if (
-        Array.isArray(m.supportedGenerationMethods) &&
-        m.supportedGenerationMethods.length > 0 &&
-        !m.supportedGenerationMethods.includes("generateContent")
-      ) {
-        continue;
-      }
-      list.push({
-        id,
-        displayName: formatModelDisplayName(id, m.displayName),
-        description: m.description,
-      });
-      if (list.length >= 100) break;
-    }
-
-    const merged = list.length > 0 ? list : DEFAULT_GEMINI_MODELS;
-    for (const dm of DEFAULT_GEMINI_MODELS) {
-      if (!merged.some((m) => m.id === dm.id)) {
-        merged.push(dm);
-      }
-    }
-    return merged;
-  } catch (err: unknown) {
-    if (err instanceof GeminiError) throw err;
-    if (/AIza[0-9A-Za-z-_]{35}/.test(apiKey)) {
-      return DEFAULT_GEMINI_MODELS;
-    }
-    throw new GeminiError(
-      "INVALID_KEY",
-      "Your API key was rejected (400/401/403). Please verify your API key above and click Test Key.",
-      403
-    );
-  }
-}
-
-export async function directGeminiGenerate(
-  apiKey: string,
-  options: GeminiRequestOptions
-): Promise<string> {
-  const cleanModel = normalizeModelId(options.model);
-  const contents = buildContents(options.prompt, options.attachments);
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${encodeURIComponent(apiKey)}`;
-
-  const contentsPayload = [
-    {
-      role: "user",
-      parts: contents.parts.map((p) => {
-        if ("inlineData" in p) {
-          return {
-            inlineData: {
-              mimeType: p.inlineData.mimeType,
-              data: p.inlineData.data,
-            },
-          };
-        }
-        return { text: p.text };
-      }),
-    },
-  ];
-
-  const bodyObj: Record<string, unknown> = {
-    contents: contentsPayload,
-  };
-
-  if (options.system && options.system.trim()) {
-    bodyObj.systemInstruction = {
-      parts: [{ text: options.system }],
-    };
-  }
-
-  const generationConfig: Record<string, unknown> = {};
-  if (
-    typeof options.temperature === "number" &&
-    !GEMINI_4_MODEL_RE.test(cleanModel)
-  ) {
-    generationConfig.temperature = options.temperature;
-  }
-  if (options.schema) {
-    generationConfig.responseMimeType = "application/json";
-    generationConfig.responseSchema = options.schema;
-  }
-  if (Object.keys(generationConfig).length > 0) {
-    bodyObj.generationConfig = generationConfig;
-  }
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(bodyObj),
+export async function listGeminiModels(): Promise<GeminiModelOption[]> {
+  const res = await fetchWithTimeout("/api/gemini/models", {
+    method: "GET",
   });
 
   if (!res.ok) {
-    if (res.status === 400 || res.status === 401 || res.status === 403) {
-      throw new GeminiError(
-        "INVALID_KEY",
-        "Your API key was rejected (400/401/403). Please verify your API key above and click Test Key.",
-        res.status
-      );
-    }
-    if (res.status === 429) {
-      throw new GeminiError(
-        "RATE_LIMIT",
-        "API rate limit reached (429). Please wait a moment and try again.",
-        429
-      );
-    }
-    throw new GeminiError(
-      `GEMINI_${res.status}`,
-      `Gemini request failed with status ${res.status}.`,
-      res.status
-    );
-  }
-
-  const data = (await res.json()) as {
-    candidates?: Array<{
-      content?: {
-        parts?: Array<{ text?: string }>;
-      };
-    }>;
-  };
-
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-  if (!text) {
-    throw new GeminiError(
-      "MALFORMED",
-      "Received an empty response from Gemini."
-    );
-  }
-  return text;
-}
-
-export async function listGeminiModels(explicitKey?: string): Promise<GeminiModelOption[]> {
-  const headers: Record<string, string> = {};
-  if (explicitKey && explicitKey.trim()) {
-    headers["x-goog-api-key"] = explicitKey.trim();
-  }
-
-  let res: Response;
-  try {
-    res = await fetchWithTimeout("/api/gemini/models", {
-      method: "GET",
-      headers,
-    });
-  } catch (err: unknown) {
-    const keyToTest = (explicitKey && explicitKey.trim()) || (await loadEncryptedApiKey());
-    if (keyToTest) {
-      return await fetchDirectGeminiModels(keyToTest);
-    }
-    throw err;
-  }
-
-  if (!res.ok) {
     if (res.status === 404) {
-      const keyToTest = (explicitKey && explicitKey.trim()) || (await loadEncryptedApiKey());
-      if (keyToTest) {
-        return await fetchDirectGeminiModels(keyToTest);
-      }
       return DEFAULT_GEMINI_MODELS;
     }
     const detail = await extractServerError(res);
@@ -469,6 +250,7 @@ export async function gemini({
   model,
   system,
   prompt,
+  stage,
   schema,
   temperature,
   attachments,
@@ -479,6 +261,7 @@ export async function gemini({
     model: cleanModel,
     system,
     prompt,
+    stage,
     schema,
     temperature,
     attachments,
@@ -504,19 +287,6 @@ export async function gemini({
   }
 
   if (!res.ok) {
-    if (res.status === 404) {
-      const savedKey = await loadEncryptedApiKey();
-      if (savedKey) {
-        return await directGeminiGenerate(savedKey, {
-          model,
-          system,
-          prompt,
-          schema,
-          temperature,
-          attachments,
-        });
-      }
-    }
     const detail = await extractServerError(res);
     throw mapStatusToError(res.status, detail);
   }
@@ -525,7 +295,7 @@ export async function gemini({
   if (!data?.text || !data.text.trim()) {
     throw new GeminiError(
       "MALFORMED",
-      "Received an empty or malformed response from Gemini."
+      "Received an empty or malformed response from server."
     );
   }
   return data.text;
@@ -536,72 +306,57 @@ export async function runPipelineViaServer(
   options: PipelineStreamOptions,
   onStage?: (stage: PipelineStage) => void
 ): Promise<PipelineStreamResult> {
-  let res: Response;
-  try {
-    res = await fetchWithTimeout(
-      "/api/gemini/pipeline",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
-        },
-        body: JSON.stringify({
-          prompt: userPrompt,
-          model: normalizeModelId(options.model),
-          brief: options.brief,
-          files: options.files,
-          runtimeErrors: options.runtimeErrors,
-          attachments: options.attachments,
-        }),
-        signal: options.signal,
-      },
-      PIPELINE_TIMEOUT_MS
-    );
-  } catch (err: unknown) {
-    const savedKey = await loadEncryptedApiKey();
-    if (savedKey) {
-      const { runPipeline } = await import("./pipeline.ts");
-      return await runPipeline(
-        userPrompt,
-        {
-          model: normalizeModelId(options.model),
-          brief: options.brief,
-          files: options.files,
-          runtimeErrors: options.runtimeErrors,
-          attachments: options.attachments,
-          generateFn: (opts) => directGeminiGenerate(savedKey, opts),
-        },
-        onStage
-      );
+  const isRepair = Boolean(options.runtimeErrors?.length && options.brief && options.files);
+  const supabaseUrl =
+    typeof import.meta !== "undefined" && import.meta.env
+      ? (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim()
+      : undefined;
+  const supabaseAnon =
+    typeof import.meta !== "undefined" && import.meta.env
+      ? (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim()
+      : undefined;
+
+  const endpoint =
+    supabaseUrl && supabaseAnon
+      ? `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/${isRepair ? "repair" : "generate"}`
+      : isRepair
+        ? "/api/repair"
+        : "/api/gemini/pipeline";
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "text/event-stream",
+    ...(options.authHeaders ?? {}),
+  };
+
+  if (typeof window !== "undefined" && !headers.Authorization) {
+    try {
+      const { getAuthHeaders } = await import("./supabase.ts");
+      Object.assign(headers, await getAuthHeaders());
+    } catch {
+      // ignore in non-browser tests
     }
-    throw err;
   }
 
+  const res = await fetchWithTimeout(
+    endpoint,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        prompt: userPrompt,
+        model: normalizeModelId(options.model),
+        brief: options.brief,
+        files: options.files,
+        runtimeErrors: options.runtimeErrors,
+        attachments: options.attachments,
+      }),
+      signal: options.signal,
+    },
+    PIPELINE_TIMEOUT_MS
+  );
+
   if (!res.ok) {
-    if (res.status === 404) {
-      const savedKey = await loadEncryptedApiKey();
-      if (!savedKey) {
-        throw new GeminiError(
-          "MISSING_KEY",
-          "API key is not configured. Open Settings > Models to connect your API key.",
-          503
-        );
-      }
-      const { runPipeline } = await import("./pipeline.ts");
-      return await runPipeline(
-        userPrompt,
-        {
-          model: normalizeModelId(options.model),
-          brief: options.brief,
-          files: options.files,
-          runtimeErrors: options.runtimeErrors,
-          attachments: options.attachments,
-          generateFn: (opts) => directGeminiGenerate(savedKey, opts),
-        },
-        onStage
-      );
-    }
     const detail = await extractServerError(res);
     throw mapStatusToError(res.status, detail);
   }
@@ -647,11 +402,11 @@ export async function runPipelineViaServer(
       const code =
         typeof parsed.code === "string"
           ? (parsed.code as GeminiErrorCode)
-          : "GEMINI_500";
+          : "HIGH_DEMAND";
       const message =
         typeof parsed.message === "string"
           ? parsed.message
-          : "Failed to build application.";
+          : "High demand right now, please try again later";
       const status = typeof parsed.status === "number" ? parsed.status : undefined;
       throw new GeminiError(code, message, status);
     }
@@ -678,7 +433,7 @@ export async function runPipelineViaServer(
   if (!finalResult) {
     throw new GeminiError(
       "MALFORMED",
-      "Pipeline stream ended before delivering generated application files."
+      "The build stream ended before producing a result. Please try again."
     );
   }
 

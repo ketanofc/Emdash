@@ -34,27 +34,27 @@ and nothing else after the files.
 - For react-ts mode: write React 18 + strict TypeScript (NEVER use ": any" or "as any") + Tailwind utility classes mapped to CSS variables (for example bg-[var(--bg)], text-[var(--text)], bg-[var(--primary)], border-[var(--muted)]). Include index.html, package.json, tsconfig.json, vite.config.ts, tailwind.config.ts, postcss.config.js, src/main.tsx, src/App.tsx, src/index.css, src/types.ts, and modular src/components/*.tsx files.
 - When editing an existing project, return ONLY the changed or added files, each written in full.`;
 
-const BRIEF_SCHEMA: Record<string, unknown> = {
-  type: "OBJECT",
+export const BRIEF_SCHEMA: Record<string, unknown> = {
+  type: "object",
   properties: {
-    appName: { type: "STRING" },
-    appType: { type: "STRING" },
-    audience: { type: "STRING" },
-    tone: { type: "STRING" },
-    layout: { type: "STRING" },
-    notes: { type: "STRING" },
-    mode: { type: "STRING", enum: ["static", "react-ts"] },
-    dark: { type: "BOOLEAN" },
+    appName: { type: "string" },
+    appType: { type: "string" },
+    audience: { type: "string" },
+    tone: { type: "string" },
+    layout: { type: "string" },
+    notes: { type: "string" },
+    mode: { type: "string", enum: ["static", "react-ts"] },
+    dark: { type: "boolean" },
     palette: {
-      type: "OBJECT",
+      type: "object",
       properties: {
-        primary: { type: "STRING" },
-        secondary: { type: "STRING" },
-        accent: { type: "STRING" },
-        background: { type: "STRING" },
-        surface: { type: "STRING" },
-        text: { type: "STRING" },
-        muted: { type: "STRING" },
+        primary: { type: "string" },
+        secondary: { type: "string" },
+        accent: { type: "string" },
+        background: { type: "string" },
+        surface: { type: "string" },
+        text: { type: "string" },
+        muted: { type: "string" },
       },
       required: [
         "primary",
@@ -67,15 +67,15 @@ const BRIEF_SCHEMA: Record<string, unknown> = {
       ],
     },
     fonts: {
-      type: "OBJECT",
+      type: "object",
       properties: {
-        heading: { type: "STRING" },
-        body: { type: "STRING" },
+        heading: { type: "string" },
+        body: { type: "string" },
       },
       required: ["heading", "body"],
     },
-    sections: { type: "ARRAY", items: { type: "STRING" } },
-    features: { type: "ARRAY", items: { type: "STRING" } },
+    sections: { type: "array", items: { type: "string" } },
+    features: { type: "array", items: { type: "string" } },
   },
   required: [
     "appName",
@@ -93,23 +93,23 @@ const BRIEF_SCHEMA: Record<string, unknown> = {
   ],
 };
 
-const PLAN_SCHEMA: Record<string, unknown> = {
-  type: "OBJECT",
+export const PLAN_SCHEMA: Record<string, unknown> = {
+  type: "object",
   properties: {
     files: {
-      type: "ARRAY",
+      type: "array",
       items: {
-        type: "OBJECT",
+        type: "object",
         properties: {
-          path: { type: "STRING" },
-          purpose: { type: "STRING" },
+          path: { type: "string" },
+          purpose: { type: "string" },
         },
         required: ["path", "purpose"],
       },
     },
-    components: { type: "ARRAY", items: { type: "STRING" } },
-    state: { type: "ARRAY", items: { type: "STRING" } },
-    interactions: { type: "ARRAY", items: { type: "STRING" } },
+    components: { type: "array", items: { type: "string" } },
+    state: { type: "array", items: { type: "string" } },
+    interactions: { type: "array", items: { type: "string" } },
   },
   required: ["files", "components", "state", "interactions"],
 };
@@ -460,6 +460,7 @@ function parseJsonWithRepair(raw: string): unknown {
 async function callJsonStage<T>(
   options: {
     model: string;
+    stage: "brief" | "plan";
     system: string;
     prompt: string;
     schema: Record<string, unknown>;
@@ -490,12 +491,14 @@ async function callJsonStage<T>(
 
 async function callBuildStage(options: {
   model: string;
+  stage: "build" | "repair";
   prompt: string;
   attachments?: AttachedFile[];
   generateFn: GeminiGenerateFn;
 }): Promise<{ summary: string; files: GeneratedFiles }> {
   const firstReply = await options.generateFn({
     model: options.model,
+    stage: options.stage,
     system: BUILD_SYSTEM_PROMPT,
     prompt: options.prompt,
     temperature: 0.3,
@@ -509,6 +512,7 @@ async function callBuildStage(options: {
 
   const retryReply = await options.generateFn({
     model: options.model,
+    stage: options.stage,
     system: BUILD_SYSTEM_PROMPT,
     prompt: `${options.prompt}\n\nYour previous reply did not contain <file path="...">...</file> blocks. Output one summary line followed by complete <file path="...">...</file> blocks.`,
     temperature: 0.3,
@@ -564,6 +568,7 @@ export async function runPipeline(
       const repairPrompt = `Fix the following runtime and validation errors in the existing ${brief.mode} project.\n\nErrors:\n${allErrors.map((e) => `- ${e}`).join("\n")}\n\nCurrent files:\n${fileSnapshot}\n\nReturn ONLY the changed files in full using <file path="...">...</file> tags.`;
       const repaired = await callBuildStage({
         model,
+        stage: "repair",
         prompt: repairPrompt,
         generateFn,
       });
@@ -582,6 +587,7 @@ export async function runPipeline(
 
   const rawBrief = await callJsonStage<DesignBrief>({
     model,
+    stage: "brief",
     system: BRIEF_SYSTEM_PROMPT,
     prompt: briefPrompt,
     schema: BRIEF_SCHEMA,
@@ -604,6 +610,7 @@ export async function runPipeline(
 
   plan = await callJsonStage<BuildPlan>({
     model,
+    stage: "plan",
     system: PLAN_SYSTEM_PROMPT,
     prompt: planPrompt,
     schema: PLAN_SCHEMA,
@@ -625,6 +632,7 @@ export async function runPipeline(
 
   const built = await callBuildStage({
     model,
+    stage: "build",
     prompt: buildPrompt,
     attachments,
     generateFn,
@@ -658,6 +666,7 @@ export async function runPipeline(
 
     const repaired = await callBuildStage({
       model,
+      stage: "repair",
       prompt: repairPrompt,
       generateFn,
     });

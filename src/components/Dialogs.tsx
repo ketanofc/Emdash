@@ -1,11 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  AlertCircle,
-  CheckCircle2,
-  Loader2,
-  RefreshCw,
-  Trash2,
-} from "lucide-react";
+import { Coins, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -14,29 +8,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/src/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/src/components/ui/select";
 import { Button } from "@/src/components/ui/button";
 import { CornerBrackets } from "@/src/components/CornerBrackets";
 import { TEMPLATES, type TemplateItem } from "@/src/data/templates";
-import {
-  FALLBACK_GEMINI_MODEL,
-  GeminiError,
-  formatModelDisplayName,
-  listGeminiModels,
-  pickDefaultFlashModel,
-} from "@/src/lib/gemini";
-import {
-  loadEncryptedApiKey,
-  saveEncryptedApiKey,
-  removeEncryptedApiKey,
-} from "@/src/lib/storage";
-import type { GeminiModelOption, UserSession } from "@/src/types";
+import { signInAccount, signOutAccount } from "@/src/lib/apiClient";
+import { isSupabaseConfigured } from "@/src/lib/supabase";
+import type { UserSession, WalletSummary } from "@/src/types";
 import type { DocSection } from "@/src/components/Footer";
 import { cn } from "@/src/lib/utils";
 
@@ -60,7 +37,7 @@ export function PricingDialog({
         <DialogHeader>
           <DialogTitle>Simple, transparent pricing</DialogTitle>
           <DialogDescription>
-            Build for free every day, or upgrade for an ad-free, unlimited workspace.
+            Build for free every day with Dash Coins, or upgrade for an ad-free workspace.
           </DialogDescription>
         </DialogHeader>
 
@@ -80,8 +57,8 @@ export function PricingDialog({
               </div>
             </div>
             <ul className="text-xs text-muted-foreground space-y-1.5 flex-1">
-              <li>Free to start · Supported by ads</li>
-              <li>Server-managed models</li>
+              <li>Daily Dash Coins grant · Supported by ads</li>
+              <li>Managed zero-setup builds</li>
               <li>Full project .zip code export</li>
               <li>Static &amp; React + TypeScript modes</li>
             </ul>
@@ -211,25 +188,42 @@ export function AuthDialog({
   onSignIn,
   onSignOut,
 }: AuthDialogProps) {
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const supabaseActive = isSupabaseConfigured();
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedEmail = email.trim();
     if (!trimmedEmail || !trimmedEmail.includes("@")) {
       setFormError("Enter a valid email address");
       return;
     }
+    if (supabaseActive && password.length < 6) {
+      setFormError("Password must be at least 6 characters");
+      return;
+    }
     setFormError(null);
-    const displayName = name.trim() || trimmedEmail.split("@")[0];
-    onSignIn({
-      name: displayName,
-      email: trimmedEmail,
-      plan: user?.plan ?? "free",
-    });
-    onOpenChange(false);
+    setSubmitting(true);
+    try {
+      const session = await signInAccount({
+        email: trimmedEmail,
+        password,
+        name: name.trim() || trimmedEmail.split("@")[0],
+        mode: authMode,
+      });
+      onSignIn(session);
+      onOpenChange(false);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Authentication failed.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -249,7 +243,7 @@ export function AuthDialog({
                 Plan: {user.plan === "pro" ? "Emdash Pro" : "Emdash Free"}
               </div>
               <div className="text-muted-foreground">
-                Your session, workspace preferences, and plan state are saved locally in this browser.
+                Your Dash Coins balance and workspace snapshots stay synced with your account.
               </div>
             </div>
             <DialogFooter>
@@ -265,8 +259,10 @@ export function AuthDialog({
                 type="button"
                 variant="destructive"
                 onClick={() => {
-                  onSignOut();
-                  onOpenChange(false);
+                  void signOutAccount().finally(() => {
+                    onSignOut();
+                    onOpenChange(false);
+                  });
                 }}
                 className="font-mono uppercase text-xs"
               >
@@ -275,26 +271,60 @@ export function AuthDialog({
             </DialogFooter>
           </>
         ) : (
-          <form onSubmit={handleSubmit} className="grid gap-4">
+          <form onSubmit={(e) => void handleSubmit(e)} className="grid gap-4">
             <DialogHeader>
-              <DialogTitle>Sign in to Emdash</DialogTitle>
+              <DialogTitle>
+                {authMode === "signin" ? "Sign in to Emdash" : "Create your Emdash account"}
+              </DialogTitle>
               <DialogDescription>
-                Save your workspace preferences and switch plans anytime.
+                Access your daily Dash Coins grant and build history anytime.
               </DialogDescription>
             </DialogHeader>
+
+            {supabaseActive && (
+              <div className="grid grid-cols-2 border border-edge bg-background p-1 gap-1">
+                <button
+                  type="button"
+                  onClick={() => setAuthMode("signin")}
+                  className={cn(
+                    "py-1.5 font-mono uppercase text-[11px] cursor-pointer transition-colors",
+                    authMode === "signin"
+                      ? "bg-card text-primary border border-edge"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Sign in
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAuthMode("signup")}
+                  className={cn(
+                    "py-1.5 font-mono uppercase text-[11px] cursor-pointer transition-colors",
+                    authMode === "signup"
+                      ? "bg-card text-primary border border-edge"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Sign up
+                </button>
+              </div>
+            )}
+
             <div className="grid gap-3">
-              <label className="grid gap-1.5">
-                <span className="font-mono uppercase text-[11px] text-muted-foreground">
-                  Name
-                </span>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Alex Rivera"
-                  className="h-9 border border-edge bg-background px-3 text-sm outline-none focus-visible:border-primary"
-                />
-              </label>
+              {(!supabaseActive || authMode === "signup") && (
+                <label className="grid gap-1.5">
+                  <span className="font-mono uppercase text-[11px] text-muted-foreground">
+                    Name
+                  </span>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Alex Rivera"
+                    className="h-9 border border-edge bg-background px-3 text-sm outline-none focus-visible:border-primary"
+                  />
+                </label>
+              )}
               <label className="grid gap-1.5">
                 <span className="font-mono uppercase text-[11px] text-muted-foreground">
                   Email
@@ -308,6 +338,21 @@ export function AuthDialog({
                   className="h-9 border border-edge bg-background px-3 text-sm outline-none focus-visible:border-primary"
                 />
               </label>
+              {supabaseActive && (
+                <label className="grid gap-1.5">
+                  <span className="font-mono uppercase text-[11px] text-muted-foreground">
+                    Password
+                  </span>
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="h-9 border border-edge bg-background px-3 text-sm outline-none focus-visible:border-primary"
+                  />
+                </label>
+              )}
               {formError && (
                 <div className="border border-destructive/40 bg-destructive/5 px-2.5 py-1.5 text-xs font-mono text-destructive">
                   {formError}
@@ -323,12 +368,145 @@ export function AuthDialog({
               >
                 Cancel
               </Button>
-              <Button type="submit" className="font-mono uppercase text-xs">
-                Continue
+              <Button type="submit" disabled={submitting} className="font-mono uppercase text-xs gap-1.5">
+                {submitting && <Loader2 className="size-3.5 animate-spin" />}
+                <span>{authMode === "signin" ? "Continue" : "Create account"}</span>
               </Button>
             </DialogFooter>
           </form>
         )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+interface WalletDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  wallet: WalletSummary;
+  user: UserSession | null;
+  onOpenAuth: () => void;
+}
+
+export function WalletDialog({
+  open,
+  onOpenChange,
+  wallet,
+  user,
+  onOpenAuth,
+}: WalletDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg border-edge bg-card">
+        <CornerBrackets />
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Coins className="size-4 text-primary" />
+            <span>Dash Coins Wallet</span>
+          </DialogTitle>
+          <DialogDescription>
+            Daily free coins refresh automatically in {wallet.resetTimezone}.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid grid-cols-3 gap-px bg-edge border border-edge">
+          <div className="bg-background p-3">
+            <div className="font-mono uppercase text-[10px] text-muted-foreground">
+              Balance
+            </div>
+            <div className="text-xl font-semibold tabular-nums mt-0.5">
+              {wallet.balance}
+            </div>
+          </div>
+          <div className="bg-background p-3">
+            <div className="font-mono uppercase text-[10px] text-muted-foreground">
+              Daily Grant
+            </div>
+            <div className="text-xl font-semibold tabular-nums mt-0.5 text-primary">
+              +{wallet.dailyGrant}
+            </div>
+          </div>
+          <div className="bg-background p-3">
+            <div className="font-mono uppercase text-[10px] text-muted-foreground">
+              Build Cost
+            </div>
+            <div className="text-xl font-semibold tabular-nums mt-0.5">
+              {wallet.buildCost}
+            </div>
+          </div>
+        </div>
+
+        {!user ? (
+          <div className="border border-edge bg-background p-3.5 text-xs flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">
+              Sign in to track your coin ledger and receive automatic daily grants.
+            </span>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                onOpenChange(false);
+                onOpenAuth();
+              }}
+              className="font-mono uppercase text-xs shrink-0"
+            >
+              Sign in
+            </Button>
+          </div>
+        ) : (
+          <div className="border border-edge bg-background max-h-[240px] overflow-auto">
+            <div className="px-3 py-2 border-b border-edge font-mono uppercase text-[10px] text-muted-foreground">
+              Recent activity
+            </div>
+            {wallet.ledger.length === 0 ? (
+              <div className="p-4 text-xs text-muted-foreground text-center">
+                No coin transactions yet.
+              </div>
+            ) : (
+              <div className="divide-y divide-edge">
+                {wallet.ledger.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between gap-2 px-3 py-2 text-xs"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-mono text-foreground truncate">
+                        {item.reason}
+                      </div>
+                      <div className="font-mono text-[10px] text-muted-foreground">
+                        {new Date(item.created_at).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0 font-mono tabular-nums">
+                      <span
+                        className={
+                          item.delta >= 0 ? "text-primary font-semibold" : "text-foreground"
+                        }
+                      >
+                        {item.delta >= 0 ? `+${item.delta}` : item.delta}
+                      </span>
+                      <div className="text-[10px] text-muted-foreground">
+                        bal {item.balance_after}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onOpenChange(false)}
+            className="border-edge font-mono uppercase text-xs"
+          >
+            Close
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -344,7 +522,7 @@ interface SupportDocsDialogProps {
 const DOC_TABS: Array<{ id: DocSection; label: string }> = [
   { id: "quickstart", label: "Quickstart" },
   { id: "prompting", label: "Prompting & Files" },
-  { id: "quota", label: "Quota & Export" },
+  { id: "quota", label: "Coins & Export" },
   { id: "privacy", label: "Privacy Policy" },
   { id: "terms", label: "Terms of Service" },
   { id: "security", label: "Security" },
@@ -363,7 +541,7 @@ export function SupportDocsDialog({
         <DialogHeader className="pr-6">
           <DialogTitle>Support documentation</DialogTitle>
           <DialogDescription>
-            Guides for prompting, file attachments, BYOK models, and exporting apps.
+            Guides for prompting, file attachments, Dash Coins, and exporting apps.
           </DialogDescription>
         </DialogHeader>
 
@@ -446,10 +624,10 @@ export function SupportDocsDialog({
             <>
               <div>
                 <h3 className="text-sm font-semibold text-foreground mb-1">
-                  Free to start · Supported by ads
+                  Free to start · Daily Dash Coins
                 </h3>
                 <p>
-                  Emdash is free to start and supported by clearly labeled sponsors, powered by models on the server so anyone can start building right away. You can also upgrade to Emdash Pro for an ad-free workspace.
+                  Emdash grants free Dash Coins every day so anyone can start building right away with zero setup. If a build fails due to high demand, spent coins are automatically refunded.
                 </p>
               </div>
               <div>
@@ -467,10 +645,10 @@ export function SupportDocsDialog({
             <>
               <div>
                 <h3 className="text-sm font-semibold text-foreground mb-1">
-                  Privacy Policy &amp; local browser storage
+                  Privacy Policy &amp; storage
                 </h3>
                 <p>
-                  Your theme preference, active model selection, generated app versions, and local account profile stay in your browser. We do not sell personal data or run cross-site tracking scripts.
+                  Your theme preference and generated app versions stay in your browser. We do not sell personal data or run cross-site tracking scripts.
                 </p>
               </div>
               <div>
@@ -478,7 +656,7 @@ export function SupportDocsDialog({
                   Prompts &amp; uploaded reference files
                 </h3>
                 <p>
-                  Prompts and attached reference files are transmitted solely to generate your requested application output and are not retained beyond the active build request unless you explicitly publish a route.
+                  Prompts and attached reference files are transmitted solely to generate your requested application output and are not stored in call logs.
                 </p>
               </div>
             </>
@@ -509,10 +687,10 @@ export function SupportDocsDialog({
             <>
               <div>
                 <h3 className="text-sm font-semibold text-foreground mb-1">
-                  Sandboxed live previews &amp; API isolation
+                  Sandboxed live previews &amp; server isolation
                 </h3>
                 <p>
-                  Every generated web application runs inside an isolated sandboxed iframe preview container, keeping preview execution separated from your host session. All model API calls run exclusively through server endpoints.
+                  Every generated web application runs inside an isolated sandboxed iframe preview container, keeping preview execution separated from your host session. All builds run exclusively through server endpoints.
                 </p>
               </div>
               <div>
@@ -777,274 +955,6 @@ export function SponsorSlotDialog({
             </DialogFooter>
           </form>
         )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-interface ModelsDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  initialModel: string;
-  onSaveModel: (model: string) => void;
-}
-
-type ModelLoadStatus =
-  | { state: "idle"; message?: string }
-  | { state: "loading"; message: string }
-  | { state: "ready"; message: string }
-  | { state: "error"; message: string };
-
-export function ModelsDialog({
-  open,
-  onOpenChange,
-  initialModel,
-  onSaveModel,
-}: ModelsDialogProps) {
-  const [models, setModels] = useState<GeminiModelOption[]>([]);
-  const [selectedModel, setSelectedModel] = useState(
-    initialModel || FALLBACK_GEMINI_MODEL
-  );
-  const [apiKey, setApiKey] = useState("");
-  const [hasStoredKey, setHasStoredKey] = useState(false);
-  const [status, setStatus] = useState<ModelLoadStatus>({ state: "idle" });
-
-  const loadModels = async (preferSelection = true, explicitKey?: string) => {
-    setStatus({ state: "loading", message: "Loading available models…" });
-    try {
-      const keyToUse = explicitKey !== undefined ? explicitKey : apiKey;
-      const listRaw = await listGeminiModels(keyToUse || undefined);
-      const list = listRaw.filter((m) => !/(?:tts|audio|image|live|robotics|computer-use)/i.test(m.id));
-
-      if (list.length === 0) {
-        setModels(defaultFallbackList);
-        setStatus({ state: "idle" });
-        return;
-      }
-      setModels(list);
-      const preferred = pickDefaultFlashModel(list);
-      if (preferSelection) {
-        setSelectedModel((prev) =>
-          list.some((m) => m.id === prev) &&
-          !/(?:tts|audio|image|live|robotics|computer-use)/i.test(prev)
-            ? prev
-            : preferred
-        );
-      }
-      if (keyToUse && keyToUse.trim()) {
-        setStatus({
-          state: "ready",
-          message: `Key valid · ${list.length} models loaded`,
-        });
-      } else {
-        setStatus({ state: "idle" });
-      }
-    } catch (err: unknown) {
-      if (err instanceof GeminiError) {
-        setStatus({
-          state: "error",
-          message: err.message,
-        });
-        return;
-      }
-      setStatus({
-        state: "error",
-        message: "Could not validate API key or load models.",
-      });
-    }
-  };
-
-  useEffect(() => {
-    if (open) {
-      setSelectedModel(initialModel || FALLBACK_GEMINI_MODEL);
-      void (async () => {
-        const stored = await loadEncryptedApiKey();
-        if (stored) {
-          setApiKey(stored);
-          setHasStoredKey(true);
-          void loadModels(true, stored);
-        } else {
-          setApiKey("");
-          setHasStoredKey(false);
-          void loadModels(true, "");
-        }
-      })();
-    }
-  }, [open, initialModel]);
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (apiKey.trim()) {
-      await saveEncryptedApiKey(apiKey.trim());
-    }
-    onSaveModel(selectedModel || FALLBACK_GEMINI_MODEL);
-    onOpenChange(false);
-  };
-
-  const handleRemoveKey = async () => {
-    await removeEncryptedApiKey();
-    setApiKey("");
-    setHasStoredKey(false);
-    void loadModels(true, "");
-  };
-
-  const defaultFallbackList: GeminiModelOption[] = [
-    { id: "gemini-3.5-flash", displayName: "Gemini 3.5 Flash (Default)" },
-    { id: "gemini-3.5-flash-lite", displayName: "Gemini 3.5 Flash Lite" },
-    { id: "gemini-4-hydrogen", displayName: "Gemini 4 Hydrogen" },
-    { id: "gemini-2.5-flash", displayName: "Gemini 2.5 Flash" },
-    { id: "gemini-4-argon", displayName: "Gemini 4 Argon" },
-  ];
-
-  const availableOptions: GeminiModelOption[] =
-    models.length > 0
-      ? models
-      : defaultFallbackList.some((m) => m.id === selectedModel)
-        ? defaultFallbackList
-        : [
-            {
-              id: selectedModel || FALLBACK_GEMINI_MODEL,
-              displayName: formatModelDisplayName(selectedModel || FALLBACK_GEMINI_MODEL),
-            },
-            ...defaultFallbackList,
-          ];
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg border-edge bg-card p-4 sm:p-6 overflow-hidden">
-        <CornerBrackets />
-        <form onSubmit={handleSave} className="grid grid-cols-[minmax(0,1fr)] min-w-0 w-full gap-4">
-          <DialogHeader className="pr-7 min-w-0">
-            <DialogTitle>Settings · Models</DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm break-words">
-              Connect your own API key and choose which model generates apps on the server.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="grid grid-cols-[minmax(0,1fr)] min-w-0 gap-3">
-            <div className="grid grid-cols-[minmax(0,1fr)] min-w-0 gap-1.5">
-              <label
-                htmlFor="api-key-input"
-                className="font-mono uppercase text-[11px] text-muted-foreground"
-              >
-                API Key
-              </label>
-              <div className="flex gap-2 min-w-0">
-                <input
-                  id="api-key-input"
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="Enter your API key..."
-                  className="h-9 w-full min-w-0 border border-edge bg-background px-3 font-mono text-xs outline-none focus-visible:border-primary"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void loadModels(false, apiKey)}
-                  disabled={status.state === "loading"}
-                  className="h-9 shrink-0 font-mono uppercase text-[11px]"
-                >
-                  Test key
-                </Button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-[minmax(0,1fr)] min-w-0 gap-1.5">
-              <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
-                <label
-                  htmlFor="model-select"
-                  className="font-mono uppercase text-[11px] text-muted-foreground"
-                >
-                  Model
-                </label>
-                <button
-                  type="button"
-                  onClick={() => void loadModels(false, apiKey)}
-                  disabled={status.state === "loading"}
-                  className="inline-flex items-center gap-1 font-mono uppercase text-[11px] text-primary hover:underline disabled:opacity-50 cursor-pointer shrink-0"
-                >
-                  <RefreshCw
-                    className={cn("size-3", status.state === "loading" && "animate-spin")}
-                    aria-hidden="true"
-                  />
-                  <span>Refresh models</span>
-                </button>
-              </div>
-              <Select value={selectedModel} onValueChange={setSelectedModel}>
-                <SelectTrigger
-                  id="model-select"
-                  className="h-9 w-full min-w-0 border-edge bg-background font-mono text-xs"
-                >
-                  <SelectValue placeholder="Select a Gemini model" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableOptions.map((m) => (
-                    <SelectItem key={m.id} value={m.id} className="font-mono text-xs">
-                      {formatModelDisplayName(m.id, m.displayName)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {status.state !== "idle" && (
-              <div
-                className={cn(
-                  "flex items-start gap-2 min-w-0 w-full border px-2.5 py-2 text-xs break-words",
-                  status.state === "ready"
-                    ? "border-primary/40 bg-primary/5 text-foreground"
-                    : status.state === "loading"
-                      ? "border-edge bg-background text-muted-foreground"
-                      : "border-destructive/40 bg-destructive/5 text-destructive"
-                )}
-              >
-                {status.state === "loading" ? (
-                  <Loader2 className="size-3.5 animate-spin shrink-0 mt-0.5 text-primary" />
-                ) : status.state === "ready" ? (
-                  <CheckCircle2 className="size-3.5 shrink-0 mt-0.5 text-primary" />
-                ) : (
-                  <AlertCircle className="size-3.5 shrink-0 mt-0.5" />
-                )}
-                <span className="min-w-0 break-words">{status.message}</span>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter className="flex-row flex-wrap items-center justify-between gap-2 pt-1 min-w-0">
-            <div>
-              {hasStoredKey && (
-                <button
-                  type="button"
-                  onClick={() => void handleRemoveKey()}
-                  className="inline-flex items-center gap-1 font-mono uppercase text-[11px] text-destructive hover:underline cursor-pointer"
-                >
-                  <Trash2 className="size-3" />
-                  <span>Remove key</span>
-                </button>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onOpenChange(false)}
-                className="h-9 border-edge font-mono uppercase text-[11px] sm:text-xs"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                size="sm"
-                className="h-9 font-mono uppercase text-[11px] sm:text-xs"
-              >
-                Save
-              </Button>
-            </div>
-          </DialogFooter>
-        </form>
       </DialogContent>
     </Dialog>
   );

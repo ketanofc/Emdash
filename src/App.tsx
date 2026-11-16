@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import JSZip from "jszip";
 import { Navbar } from "@/src/components/Navbar";
 import { HomeView } from "@/src/components/HomeView";
@@ -6,22 +6,21 @@ import { WorkspaceView } from "@/src/components/WorkspaceView";
 import { Footer, type DocSection } from "@/src/components/Footer";
 import {
   AuthDialog,
-  ModelsDialog,
   PricingDialog,
   SponsorSlotDialog,
   SupportDocsDialog,
   TemplatesDialog,
+  WalletDialog,
 } from "@/src/components/Dialogs";
 import {
   FALLBACK_GEMINI_MODEL,
   GeminiError,
   runPipelineViaServer,
 } from "@/src/lib/gemini";
+import { fetchAuthState, fetchWalletSummary } from "@/src/lib/apiClient";
 import {
   clearVersionsFromDb,
-  loadSelectedModel,
   loadVersionsFromDb,
-  saveSelectedModel,
   saveVersionToDb,
 } from "@/src/lib/storage";
 import type {
@@ -31,18 +30,22 @@ import type {
   ChatMessage,
   PipelineStage,
   UserSession,
+  WalletSummary,
 } from "@/src/types";
 import type { TemplateItem } from "@/src/data/templates";
 
-function loadInitialUser(): UserSession | null {
-  try {
-    const raw = localStorage.getItem("emdash_user");
-    if (!raw) return null;
-    return JSON.parse(raw) as UserSession;
-  } catch {
-    return null;
-  }
-}
+const LazyAdminPage = lazy(() => import("@/src/components/admin/AdminPage"));
+
+const DEFAULT_WALLET: WalletSummary = {
+  balance: 100,
+  dailyGrant: 100,
+  buildCost: 10,
+  repairCost: 0,
+  maintenance: false,
+  signupsEnabled: true,
+  resetTimezone: "UTC",
+  ledger: [],
+};
 
 function slugifyTitle(title: string): string {
   return (
@@ -59,14 +62,23 @@ function formatFriendlyPipelineError(err: unknown): string {
     return "You appear to be offline. Check your internet connection and try again.";
   }
   if (err instanceof GeminiError) {
-    if (err.code === "MISSING_KEY" || err.code === "INVALID_KEY") {
-      return "The server's API key is missing or invalid. Check Settings > Models.";
+    if (
+      err.code === "HIGH_DEMAND" ||
+      err.code === "RATE_LIMIT" ||
+      err.code === "MISSING_KEY" ||
+      err.status === 503 ||
+      err.status === 429
+    ) {
+      return "High demand right now, please try again later";
     }
-    if (err.code === "RATE_LIMIT") {
-      return "API rate limit reached (429). Please wait a moment and try again.";
+    if (err.code === "INSUFFICIENT_COINS" || err.status === 402) {
+      return "You don't have enough Dash Coins right now. Daily coins reset automatically.";
+    }
+    if (err.code === "SUSPENDED" || err.status === 403) {
+      return "Your account is currently suspended.";
     }
     if (err.code === "MALFORMED") {
-      return "The model returned malformed output after retrying. Try simplifying your prompt or switching models.";
+      return "Build output was incomplete. Please try again.";
     }
     if (err.code === "TIMEOUT") {
       return "Generation timed out. Please try again.";
@@ -91,7 +103,8 @@ export default function App() {
     }
   });
 
-  const [user, setUser] = useState<UserSession | null>(loadInitialUser);
+  const [user, setUser] = useState<UserSession | null>(null);
+  const [wallet, setWallet] = useState<WalletSummary>(DEFAULT_WALLET);
   const [planOverride, setPlanOverride] = useState<"free" | "pro">(() => {
     try {
       return localStorage.getItem("emdash_plan") === "pro" ? "pro" : "free";
@@ -100,11 +113,12 @@ export default function App() {
     }
   });
 
-  const [selectedModel, setSelectedModel] = useState<string>(() =>
-    loadSelectedModel(FALLBACK_GEMINI_MODEL)
-  );
-
-  const [mode, setMode] = useState<"home" | "workspace">("home");
+  const [mode, setMode] = useState<"home" | "workspace" | "admin">(() => {
+    if (typeof window !== "undefined" && window.location.pathname.startsWith("/admin")) {
+      return "admin";
+    }
+    return "home";
+  });
   const [homePrompt, setHomePrompt] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [versions, setVersions] = useState<AppVersion[]>([]);
@@ -112,7 +126,7 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState(false);
 
   // Dialog states
-  const [modelsOpen, setModelsOpen] = useState(false);
+  const [walletOpen, setWalletOpen] = useState(false);
   const [pricingOpen, setPricingOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
@@ -122,6 +136,47 @@ export default function App() {
 
   const autoRepairedVersionsRef = useRef<Set<number>>(new Set());
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  const refreshSessionAndWallet = useCallback(async () => {
+    try {
+      const auth = await fetchAuthState();
+      setUser(auth.user);
+    } catch {
+      // keep anonymous session
+    }
+    try {
+      const summary = await fetchWalletSummary();
+      setWallet(summary);
+    } catch {
+      // keep existing wallet state
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshSessionAndWallet();
+  }, [refreshSessionAndWallet]);
+
+  useEffect(() => {
+    const onPopState = () => {
+      if (window.location.pathname.startsWith("/admin")) {
+        setMode("admin");
+      } else {
+        setMode("home");
+      }
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  const navigateToMode = useCallback((nextMode: "home" | "workspace" | "admin") => {
+    setMode(nextMode);
+    if (typeof window !== "undefined") {
+      const targetPath = nextMode === "admin" ? "/admin" : "/";
+      if (window.location.pathname !== targetPath) {
+        window.history.pushState({}, "", targetPath);
+      }
+    }
+  }, []);
 
   const handlePause = useCallback(() => {
     abortControllerRef.current?.abort();
@@ -168,50 +223,34 @@ export default function App() {
     } catch {
       // ignore
     }
-    setUser((prev) => {
-      if (!prev) return null;
-      const updated = { ...prev, plan };
-      try {
-        localStorage.setItem("emdash_user", JSON.stringify(updated));
-      } catch {
-        // ignore
-      }
-      return updated;
-    });
+    setUser((prev) => (prev ? { ...prev, plan } : null));
   }, []);
 
   const handleSignIn = useCallback(
     (session: UserSession) => {
       const merged: UserSession = { ...session, plan: isPro ? "pro" : session.plan };
       setUser(merged);
-      try {
-        localStorage.setItem("emdash_user", JSON.stringify(merged));
-      } catch {
-        // ignore
-      }
+      void refreshSessionAndWallet();
     },
-    [isPro]
+    [isPro, refreshSessionAndWallet]
   );
 
   const handleSignOut = useCallback(() => {
     setUser(null);
-    try {
-      localStorage.removeItem("emdash_user");
-    } catch {
-      // ignore
+    if (mode === "admin") {
+      navigateToMode("home");
     }
-  }, []);
+    void refreshSessionAndWallet();
+  }, [mode, navigateToMode, refreshSessionAndWallet]);
 
   const executePipelineRun = useCallback(
     async ({
-      modelToUse,
       promptText,
       attachments,
       existingVersions,
       runtimeErrors,
       isFreshBuild,
     }: {
-      modelToUse: string;
       promptText: string;
       attachments: AttachedFile[];
       existingVersions: AppVersion[];
@@ -220,7 +259,7 @@ export default function App() {
     }) => {
       if (isGenerating) return;
 
-      setMode("workspace");
+      navigateToMode("workspace");
       setIsGenerating(true);
 
       if (isFreshBuild) {
@@ -275,7 +314,7 @@ export default function App() {
         const result = await runPipelineViaServer(
           promptText,
           {
-            model: modelToUse,
+            model: FALLBACK_GEMINI_MODEL,
             brief: currentApp?.brief,
             files: currentApp?.files,
             runtimeErrors,
@@ -352,9 +391,10 @@ export default function App() {
       } finally {
         abortControllerRef.current = null;
         setIsGenerating(false);
+        void refreshSessionAndWallet();
       }
     },
-    [isGenerating, selectedVersion]
+    [isGenerating, navigateToMode, refreshSessionAndWallet, selectedVersion]
   );
 
   const handleStartFromHome = useCallback(
@@ -362,27 +402,25 @@ export default function App() {
       setHomePrompt("");
       setSelectedVersion(1);
       await executePipelineRun({
-        modelToUse: selectedModel,
         promptText,
         attachments,
         existingVersions: [],
         isFreshBuild: true,
       });
     },
-    [executePipelineRun, selectedModel]
+    [executePipelineRun]
   );
 
   const handleFollowUp = useCallback(
     async (promptText: string, attachments: AttachedFile[]) => {
       await executePipelineRun({
-        modelToUse: selectedModel,
         promptText,
         attachments,
         existingVersions: versions,
         isFreshBuild: false,
       });
     },
-    [executePipelineRun, selectedModel, versions]
+    [executePipelineRun, versions]
   );
 
   const handleRuntimeError = useCallback(
@@ -392,7 +430,6 @@ export default function App() {
 
       autoRepairedVersionsRef.current.add(erroredVersion.version);
       await executePipelineRun({
-        modelToUse: selectedModel,
         promptText: `Fix runtime errors in v${erroredVersion.version}`,
         attachments: [],
         existingVersions: versions,
@@ -400,17 +437,12 @@ export default function App() {
         isFreshBuild: false,
       });
     },
-    [executePipelineRun, isGenerating, selectedModel, versions]
+    [executePipelineRun, isGenerating, versions]
   );
-
-  const handleSaveModel = useCallback((newModel: string) => {
-    saveSelectedModel(newModel);
-    setSelectedModel(newModel);
-  }, []);
 
   const handleGoHome = () => {
     if (isGenerating) return;
-    setMode("home");
+    navigateToMode("home");
     setMessages([]);
   };
 
@@ -448,9 +480,9 @@ export default function App() {
   return (
     <div
       className={
-        mode === "home"
-          ? "min-h-full w-full max-w-full overflow-x-clip flex flex-col bg-background text-foreground"
-          : "h-full w-full max-w-full overflow-x-clip flex flex-col bg-background text-foreground"
+        mode === "workspace"
+          ? "h-full w-full max-w-full overflow-x-clip flex flex-col bg-background text-foreground"
+          : "min-h-full w-full max-w-full overflow-x-clip flex flex-col bg-background text-foreground"
       }
     >
       <Navbar
@@ -460,12 +492,27 @@ export default function App() {
         onGoHome={handleGoHome}
         onOpenTemplates={handleOpenTemplates}
         onOpenPricing={() => setPricingOpen(true)}
-        onOpenModels={() => setModelsOpen(true)}
+        onOpenWallet={() => setWalletOpen(true)}
+        onOpenAdmin={user?.role === "admin" ? () => navigateToMode("admin") : undefined}
         onOpenAuth={() => setAuthOpen(true)}
         user={user}
+        walletBalance={wallet.balance}
       />
 
-      {mode === "home" ? (
+      {mode === "admin" ? (
+        <Suspense
+          fallback={
+            <main className="flex-1 grid place-items-center p-8 font-mono text-xs text-muted-foreground">
+              Loading admin console…
+            </main>
+          }
+        >
+          <LazyAdminPage
+            onBackHome={() => navigateToMode("home")}
+            onOpenAuth={() => setAuthOpen(true)}
+          />
+        </Suspense>
+      ) : mode === "home" ? (
         <>
           <HomeView
             prompt={homePrompt}
@@ -473,7 +520,7 @@ export default function App() {
             onSubmitPrompt={(p, files) => void handleStartFromHome(p, files)}
             isPro={isPro}
             onOpenPricing={() => setPricingOpen(true)}
-            onOpenModels={() => setModelsOpen(true)}
+            onOpenWallet={() => setWalletOpen(true)}
           />
           <Footer
             onGoHome={handleGoHome}
@@ -495,9 +542,8 @@ export default function App() {
           isGenerating={isGenerating}
           isPro={isPro}
           isDark={isDark}
-          selectedModel={selectedModel}
-          onOpenModels={() => setModelsOpen(true)}
           onOpenPricing={() => setPricingOpen(true)}
+          onOpenWallet={() => setWalletOpen(true)}
           onSendFollowUp={(p, files) => void handleFollowUp(p, files)}
           onRuntimeError={(ver, errs) => void handleRuntimeError(ver, errs)}
           onExport={(ver) => void handleExportZip(ver)}
@@ -505,11 +551,12 @@ export default function App() {
         />
       )}
 
-      <ModelsDialog
-        open={modelsOpen}
-        onOpenChange={setModelsOpen}
-        initialModel={selectedModel}
-        onSaveModel={handleSaveModel}
+      <WalletDialog
+        open={walletOpen}
+        onOpenChange={setWalletOpen}
+        wallet={wallet}
+        user={user}
+        onOpenAuth={() => setAuthOpen(true)}
       />
 
       <PricingDialog

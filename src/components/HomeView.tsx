@@ -23,7 +23,7 @@ interface HomeViewProps {
   onSubmitPrompt: (promptText: string, attachments: AttachedFile[]) => void;
   isPro: boolean;
   onOpenPricing: () => void;
-  onOpenModels: () => void;
+  onOpenWallet: () => void;
 }
 
 const TEMPLATE_TAGS: Record<string, string> = {
@@ -40,7 +40,7 @@ export function HomeView({
   onSubmitPrompt,
   isPro,
   onOpenPricing,
-  onOpenModels,
+  onOpenWallet,
 }: HomeViewProps) {
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [attachments, setAttachments] = useState<AttachedFile[]>([]);
@@ -278,7 +278,7 @@ export function HomeView({
 
               <button
                 type="button"
-                onClick={onOpenModels}
+                onClick={onOpenWallet}
                 className="inline-flex items-center h-9 px-3 border border-edge bg-background font-mono uppercase text-xs text-muted-foreground hover:text-foreground hover:border-neutral transition-colors cursor-pointer"
               >
                 {isPro ? "Emdash Pro" : "Emdash Free"}

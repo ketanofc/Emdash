@@ -97,7 +97,29 @@ export interface ChatMessage {
 }
 
 export interface UserSession {
+  id?: string;
   email: string;
   name: string;
   plan: "free" | "pro";
+  role?: "user" | "admin";
+  status?: "active" | "suspended";
+}
+
+export interface WalletLedgerItem {
+  id: string;
+  delta: number;
+  balance_after: number;
+  reason: string;
+  created_at: string;
+}
+
+export interface WalletSummary {
+  balance: number;
+  dailyGrant: number;
+  buildCost: number;
+  repairCost: number;
+  maintenance: boolean;
+  signupsEnabled: boolean;
+  resetTimezone: string;
+  ledger: WalletLedgerItem[];
 }

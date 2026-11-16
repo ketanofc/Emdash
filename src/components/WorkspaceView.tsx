@@ -24,7 +24,6 @@ import {
   Paperclip,
   RotateCcw,
   RotateCw,
-  Settings,
   Smartphone,
   Square,
   Tablet,
@@ -48,7 +47,6 @@ import {
   formatFileSize,
   processUploadedFile,
 } from "@/src/lib/fileAttachment";
-import { formatModelDisplayName } from "@/src/lib/gemini";
 import { buildStaticPreviewHtml } from "@/src/lib/pipeline";
 import type {
   AppVersion,
@@ -69,9 +67,8 @@ interface WorkspaceViewProps {
   isGenerating: boolean;
   isPro: boolean;
   isDark: boolean;
-  selectedModel: string;
-  onOpenModels: () => void;
   onOpenPricing: () => void;
+  onOpenWallet: () => void;
   onSendFollowUp: (prompt: string, attachments: AttachedFile[]) => void;
   onRuntimeError: (version: AppVersion, errors: string[]) => void;
   onExport: (version: AppVersion) => void;
@@ -302,9 +299,8 @@ export function WorkspaceView({
   isGenerating,
   isPro,
   isDark,
-  selectedModel,
-  onOpenModels,
   onOpenPricing,
+  onOpenWallet,
   onSendFollowUp,
   onRuntimeError,
   onExport,
@@ -547,12 +543,10 @@ export function WorkspaceView({
             <div className="flex items-center gap-1.5 min-w-0">
               <button
                 type="button"
-                onClick={onOpenModels}
-                title="Select Gemini model"
-                className="inline-flex items-center gap-1.5 h-7 px-2 border border-edge bg-background font-mono text-[11px] text-foreground hover:border-primary transition-colors truncate max-w-[165px] cursor-pointer"
+                onClick={onOpenWallet}
+                className="inline-flex items-center gap-1.5 h-7 px-2 border border-edge bg-background font-mono uppercase text-[10px] text-foreground hover:border-primary transition-colors cursor-pointer"
               >
-                <Settings className="size-3 text-primary shrink-0" />
-                <span className="truncate">{formatModelDisplayName(selectedModel)}</span>
+                <span>{isPro ? "Pro" : "Managed"}</span>
               </button>
               {!isPro && (
                 <button

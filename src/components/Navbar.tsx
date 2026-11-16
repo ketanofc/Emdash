@@ -1,20 +1,22 @@
 import { useEffect, useState } from "react";
-import { ArrowUpRight, Moon, Sun, X } from "lucide-react";
+import { ArrowUpRight, Coins, Moon, ShieldCheck, Sun, X } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { CornerBrackets } from "@/src/components/CornerBrackets";
 import type { UserSession } from "@/src/types";
 import { cn } from "@/src/lib/utils";
 
 interface NavbarProps {
-  mode: "home" | "workspace";
+  mode: "home" | "workspace" | "admin";
   isDark: boolean;
   onToggleTheme: () => void;
   onGoHome: () => void;
   onOpenTemplates: () => void;
   onOpenPricing: () => void;
-  onOpenModels: () => void;
+  onOpenWallet: () => void;
+  onOpenAdmin?: () => void;
   onOpenAuth: () => void;
   user: UserSession | null;
+  walletBalance: number;
 }
 
 export function Navbar({
@@ -24,9 +26,11 @@ export function Navbar({
   onGoHome,
   onOpenTemplates,
   onOpenPricing,
-  onOpenModels,
+  onOpenWallet,
+  onOpenAdmin,
   onOpenAuth,
   user,
+  walletBalance,
 }: NavbarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -48,6 +52,8 @@ export function Navbar({
     setMobileMenuOpen(false);
     action();
   };
+
+  const isAdmin = user?.role === "admin";
 
   return (
     <aside className="sticky top-0 z-40 w-full max-w-full shrink-0 overflow-x-clip bg-background px-2 pt-2">
@@ -103,9 +109,33 @@ export function Navbar({
           >
             Pricing
           </button>
+          {isAdmin && onOpenAdmin && (
+            <button
+              type="button"
+              onClick={onOpenAdmin}
+              className={cn(
+                "inline-flex items-center gap-1 text-sm lg:text-[15px] tracking-tight font-sans transition-colors hover:text-primary whitespace-nowrap shrink-0 cursor-pointer",
+                mode === "admin" ? "text-primary font-medium" : "text-muted-foreground"
+              )}
+            >
+              <ShieldCheck className="size-3.5 text-primary" />
+              <span>Admin</span>
+            </button>
+          )}
         </nav>
 
         <div className="flex items-center justify-end gap-1.5 sm:gap-2 shrink-0 md:flex-1">
+          <button
+            type="button"
+            onClick={() => handleNavAction(onOpenWallet)}
+            title="Dash Coins wallet"
+            aria-label={`Dash Coins balance: ${walletBalance}`}
+            className="inline-flex items-center gap-1.5 h-8 sm:h-9 px-2 sm:px-2.5 border border-edge bg-background hover:border-primary font-mono text-[11px] sm:text-xs text-foreground transition-colors shrink-0 cursor-pointer tabular-nums"
+          >
+            <Coins className="size-3.5 text-primary shrink-0" />
+            <span>{walletBalance}</span>
+          </button>
+
           <Button
             variant="outline"
             size="icon"
@@ -216,16 +246,18 @@ export function Navbar({
                 <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
               </span>
             </button>
-            <button
-              type="button"
-              onClick={() => handleNavAction(onOpenModels)}
-              className="group flex items-center justify-between px-4 py-3 text-left text-sm font-sans text-foreground transition-colors hover:bg-muted/60 hover:text-primary cursor-pointer"
-            >
-              <span>Models</span>
-              <span className="size-6 border border-edge bg-background grid place-items-center text-muted-foreground transition-colors group-hover:border-primary group-hover:text-primary">
-                <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-              </span>
-            </button>
+            {isAdmin && onOpenAdmin && (
+              <button
+                type="button"
+                onClick={() => handleNavAction(onOpenAdmin)}
+                className="group flex items-center justify-between px-4 py-3 text-left text-sm font-sans text-primary transition-colors hover:bg-muted/60 cursor-pointer"
+              >
+                <span>Admin</span>
+                <span className="size-6 border border-primary/50 bg-background grid place-items-center text-primary">
+                  <ArrowUpRight className="size-3.5" />
+                </span>
+              </button>
+            )}
           </div>
         </nav>
       )}
