@@ -121,6 +121,19 @@ export default function App() {
   const [sponsorOpen, setSponsorOpen] = useState(false);
 
   const autoRepairedVersionsRef = useRef<Set<number>>(new Set());
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const handlePause = useCallback(() => {
+    abortControllerRef.current?.abort();
+    setIsGenerating(false);
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.status === "thinking"
+          ? { ...m, status: "error", content: "Generation paused by user." }
+          : m
+      )
+    );
+  }, []);
 
   const isPro = (user?.plan ?? planOverride) === "pro";
 
@@ -217,6 +230,9 @@ export default function App() {
         setMessages([]);
       }
 
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
       const startedAt = Date.now();
       const userMsgId = `u-${Date.now()}`;
       const assistantMsgId = `a-${Date.now() + 1}`;
@@ -261,6 +277,7 @@ export default function App() {
             files: currentApp?.files,
             runtimeErrors,
             attachments,
+            signal: abortController.signal,
           },
           (stage: PipelineStage) => {
             setMessages((prev) =>
@@ -314,6 +331,9 @@ export default function App() {
           )
         );
       } catch (err: unknown) {
+        if (abortController.signal.aborted) {
+          return;
+        }
         const friendly = formatFriendlyPipelineError(err);
         setMessages((prev) =>
           prev.map((m) =>
@@ -327,6 +347,7 @@ export default function App() {
           )
         );
       } finally {
+        abortControllerRef.current = null;
         setIsGenerating(false);
       }
     },
@@ -477,6 +498,7 @@ export default function App() {
           onSendFollowUp={(p, files) => void handleFollowUp(p, files)}
           onRuntimeError={(ver, errs) => void handleRuntimeError(ver, errs)}
           onExport={(ver) => void handleExportZip(ver)}
+          onPause={handlePause}
         />
       )}
 

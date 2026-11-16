@@ -15,13 +15,18 @@ import {
   Download,
   File as FileIcon,
   FileCode2,
+  FileText,
+  Folder,
   FolderOpen,
+  Globe,
   Loader2,
   Monitor,
   Paperclip,
+  Pencil,
   RotateCw,
   Settings,
   Smartphone,
+  Square,
   Tablet,
   X,
 } from "lucide-react";
@@ -70,6 +75,7 @@ interface WorkspaceViewProps {
   onSendFollowUp: (prompt: string, attachments: AttachedFile[]) => void;
   onRuntimeError: (version: AppVersion, errors: string[]) => void;
   onExport: (version: AppVersion) => void;
+  onPause?: () => void;
 }
 
 const STAGE_LABELS: Record<PipelineStage, string> = {
@@ -190,6 +196,104 @@ function SandpackErrorBridge({
   return null;
 }
 
+function getFileIcon(filePath: string) {
+  if (filePath.endsWith(".html")) return <Globe className="size-3.5 text-amber-500 shrink-0" />;
+  if (filePath.endsWith(".css")) return <FileCode2 className="size-3.5 text-blue-500 shrink-0" />;
+  if (filePath.endsWith(".ts") || filePath.endsWith(".tsx")) return <FileCode2 className="size-3.5 text-primary shrink-0" />;
+  if (filePath.endsWith(".json")) return <FileCode2 className="size-3.5 text-emerald-500 shrink-0" />;
+  if (filePath.endsWith(".js") || filePath.endsWith(".jsx")) return <FileCode2 className="size-3.5 text-yellow-500 shrink-0" />;
+  return <FileText className="size-3.5 text-muted-foreground shrink-0" />;
+}
+
+function renderHighlightedLine(line: string, ext: string) {
+  if (!line.trim()) return <span>&nbsp;</span>;
+  if (line.trim().startsWith("//") || line.trim().startsWith("/*") || line.trim().startsWith("<!--")) {
+    return <span className="text-muted-foreground italic">{line}</span>;
+  }
+  const tokens: Array<{ text: string; type: string }> = [];
+  let current = "";
+  let i = 0;
+  while (i < line.length) {
+    const char = line[i];
+    if (char === '"' || char === "'" || char === "`") {
+      if (current) {
+        tokens.push({ text: current, type: "plain" });
+        current = "";
+      }
+      const quote = char;
+      let str = quote;
+      i++;
+      while (i < line.length && line[i] !== quote) {
+        str += line[i];
+        i++;
+      }
+      if (i < line.length) {
+        str += quote;
+        i++;
+      }
+      tokens.push({ text: str, type: "string" });
+      continue;
+    }
+    current += char;
+    i++;
+  }
+  if (current) {
+    tokens.push({ text: current, type: "plain" });
+  }
+
+  return (
+    <span>
+      {tokens.map((token, tIdx) => {
+        if (token.type === "string") {
+          return <span key={tIdx} className="text-emerald-600 dark:text-emerald-400 font-medium">{token.text}</span>;
+        }
+        const words = token.text.split(/([ \t(){}[\]<>.,:;=+\-*/?!&|]+)/);
+        return (
+          <span key={tIdx}>
+            {words.map((w, wIdx) => {
+              const kw = ["import", "export", "from", "const", "let", "var", "function", "return", "if", "else", "default", "interface", "type", "class", "async", "await", "true", "false", "null", "undefined", "as"];
+              const builtin = ["console", "window", "document", "Math", "JSON", "Array", "Object", "String", "Promise", "React", "useState", "useEffect", "useMemo", "useRef", "useCallback"];
+              if (kw.includes(w)) {
+                return <span key={wIdx} className="text-purple-600 dark:text-purple-400 font-semibold">{w}</span>;
+              }
+              if (builtin.includes(w)) {
+                return <span key={wIdx} className="text-blue-600 dark:text-blue-400 font-medium">{w}</span>;
+              }
+              if (/^[A-Z][a-zA-Z0-9_$]*$/.test(w)) {
+                return <span key={wIdx} className="text-amber-600 dark:text-amber-400">{w}</span>;
+              }
+              return <span key={wIdx}>{w}</span>;
+            })}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+function renderColorfulCode(code: string, filePath: string) {
+  const lines = code.split("\n");
+  const ext = filePath.split(".").pop()?.toLowerCase() || "";
+  return (
+    <div className="w-full font-mono text-xs overflow-x-auto bg-card">
+      <table className="w-full border-collapse">
+        <tbody>
+          {lines.map((line, idx) => (
+            <tr key={idx} className="hover:bg-muted/40 transition-colors">
+              <td className="select-none text-right pr-4 text-muted-foreground/40 w-12 py-0.5 text-[11px] border-r border-edge/40 bg-background/50">
+                {idx + 1}
+              </td>
+              <td className="pl-4 py-0.5 whitespace-pre text-foreground">
+                {renderHighlightedLine(line, ext)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function WorkspaceView({
   messages,
   versions,
@@ -204,6 +308,7 @@ export function WorkspaceView({
   onSendFollowUp,
   onRuntimeError,
   onExport,
+  onPause,
 }: WorkspaceViewProps) {
   const [followUp, setFollowUp] = useState("");
   const [attachments, setAttachments] = useState<AttachedFile[]>([]);
@@ -213,11 +318,24 @@ export function WorkspaceView({
   const [device, setDevice] = useState<DeviceViewport>("desktop");
   const [reloadNonce, setReloadNonce] = useState(0);
   const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [selectedFilePath, setSelectedFilePath] = useState<string>("");
   const [publishToastOpen, setPublishToastOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleCopyMessage = (id: string, text: string) => {
+    void navigator.clipboard.writeText(text);
+    setCopiedMessageId(id);
+    window.setTimeout(() => setCopiedMessageId(null), 1500);
+  };
+
+  const handleEditMessage = (text: string) => {
+    setFollowUp(text);
+    textareaRef.current?.focus();
+  };
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -377,10 +495,10 @@ export function WorkspaceView({
 
   const frameWidthClass =
     device === "mobile"
-      ? "w-[390px] border-x border-edge"
+      ? "w-[390px] h-full border-x border-edge"
       : device === "tablet"
-        ? "w-[768px] border-x border-edge"
-        : "w-full";
+        ? "w-[768px] h-full border-x border-edge"
+        : "w-full h-full";
 
   return (
     <div className="flex-1 min-h-0 px-2 pb-2 flex flex-col relative">
@@ -418,7 +536,7 @@ export function WorkspaceView({
               msg.role === "user" ? (
                 <div
                   key={msg.id}
-                  className="self-end max-w-[88%] border border-edge bg-card px-3.5 py-2 text-[13.5px] leading-relaxed text-foreground"
+                  className="self-end max-w-[88%] border border-edge bg-card px-3.5 py-2 text-[13.5px] leading-relaxed text-foreground group relative"
                 >
                   <div>{msg.content}</div>
                   {msg.attachments && msg.attachments.length > 0 ? (
@@ -450,32 +568,78 @@ export function WorkspaceView({
                       </div>
                     )
                   )}
+                  <div className="mt-1.5 flex items-center justify-end gap-2.5 opacity-80 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                    <button
+                      type="button"
+                      onClick={() => handleCopyMessage(msg.id, msg.content)}
+                      title="Copy message"
+                      className="text-[11px] font-mono text-muted-foreground hover:text-foreground inline-flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      {copiedMessageId === msg.id ? (
+                        <>
+                          <Check className="size-3 text-primary" />
+                          <span className="text-primary font-medium">Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="size-3" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleEditMessage(msg.content)}
+                      title="Edit message"
+                      className="text-[11px] font-mono text-muted-foreground hover:text-foreground inline-flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <Pencil className="size-3" />
+                      <span>Edit</span>
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div key={msg.id} className="flex flex-col gap-2">
-                  <div className="flex items-center gap-1 font-mono uppercase text-[11px] text-muted-foreground">
-                    <img
-                      src="/assets/emdash-logo.png"
-                      alt="Emdash"
-                      className="size-4 object-cover shrink-0"
-                    />
-                    {msg.status === "thinking" ? (
-                      <span className="inline-flex items-center gap-1.5 text-primary">
-                        <Loader2 className="size-3.5 animate-spin" />
-                        <span>{STAGE_LABELS[msg.stage ?? "brief"]}</span>
-                      </span>
-                    ) : msg.status === "error" ? (
-                      <span className="inline-flex items-center gap-1.5 text-destructive font-medium">
-                        <AlertCircle className="size-3.5" />
-                        <span>Generation failed</span>
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5">
-                        <CheckCircle2 className="size-3.5 text-primary" />
-                        <span className="tabular-nums">
-                          Built in {msg.elapsedSeconds ?? 2}s
+                  <div className="flex items-center justify-between gap-1 font-mono uppercase text-[11px] text-muted-foreground w-full">
+                    <div className="flex items-center gap-1">
+                      <img
+                        src="/assets/emdash-logo.png"
+                        alt="Emdash"
+                        className="size-4 object-cover shrink-0"
+                      />
+                      {msg.status === "thinking" ? (
+                        <span className="inline-flex items-center gap-1.5 text-primary">
+                          <Loader2 className="size-3.5 animate-spin" />
+                          <span>{STAGE_LABELS[msg.stage ?? "brief"]}</span>
                         </span>
-                      </span>
+                      ) : msg.status === "error" ? (
+                        <span className="inline-flex items-center gap-1.5 text-destructive font-medium">
+                          <AlertCircle className="size-3.5" />
+                          <span>
+                            {msg.content === "Generation paused by user."
+                              ? "Generation paused"
+                              : "Generation failed"}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5">
+                          <CheckCircle2 className="size-3.5 text-primary" />
+                          <span className="tabular-nums">
+                            Built in {msg.elapsedSeconds ?? 2}s
+                          </span>
+                        </span>
+                      )}
+                    </div>
+                    {msg.status === "thinking" && onPause && (
+                      <button
+                        type="button"
+                        onClick={onPause}
+                        title="Pause generation"
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-mono border border-edge bg-background hover:bg-muted text-muted-foreground hover:text-destructive cursor-pointer transition-colors"
+                      >
+                        <Square className="size-2.5 fill-current" />
+                        <span>Pause</span>
+                      </button>
                     )}
                   </div>
 
@@ -496,16 +660,38 @@ export function WorkspaceView({
                   )}
 
                   {msg.content && (
-                    <p
-                      className={cn(
-                        "text-[13.5px] leading-relaxed",
-                        msg.status === "error"
-                          ? "text-destructive"
-                          : "text-foreground"
-                      )}
-                    >
-                      {msg.content}
-                    </p>
+                    <div className="group relative">
+                      <p
+                        className={cn(
+                          "text-[13.5px] leading-relaxed",
+                          msg.status === "error"
+                            ? "text-destructive"
+                            : "text-foreground"
+                        )}
+                      >
+                        {msg.content}
+                      </p>
+                      <div className="mt-1 flex items-center justify-end opacity-80 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                        <button
+                          type="button"
+                          onClick={() => handleCopyMessage(msg.id, msg.content)}
+                          title="Copy response"
+                          className="text-[11px] font-mono text-muted-foreground hover:text-foreground inline-flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          {copiedMessageId === msg.id ? (
+                            <>
+                              <Check className="size-3 text-primary" />
+                              <span className="text-primary font-medium">Copied</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="size-3" />
+                              <span>Copy</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
                   )}
 
                   {msg.version && (
@@ -642,6 +828,7 @@ export function WorkspaceView({
                   <Paperclip className="size-3.5" />
                 </button>
                 <Textarea
+                  ref={textareaRef}
                   value={followUp}
                   onChange={(e) => setFollowUp(e.target.value)}
                   onPaste={handlePaste}
@@ -656,15 +843,27 @@ export function WorkspaceView({
                   rows={1}
                   className="min-h-[36px] max-h-[120px] resize-none border-0 px-2 py-1.5 text-[13.5px]"
                 />
-                <button
-                  type="button"
-                  onClick={handleSend}
-                  disabled={(!followUp.trim() && attachments.length === 0) || isGenerating}
-                  aria-label="Send"
-                  className="size-8 shrink-0 bg-primary text-primary-foreground grid place-items-center transition-all hover:bg-primary/85 active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
-                >
-                  <ArrowUp className="size-4" />
-                </button>
+                {isGenerating ? (
+                  <button
+                    type="button"
+                    onClick={onPause}
+                    aria-label="Pause generation"
+                    title="Pause generation"
+                    className="size-8 shrink-0 bg-destructive text-destructive-foreground grid place-items-center transition-all hover:bg-destructive/85 active:scale-95 cursor-pointer shadow-sm"
+                  >
+                    <Square className="size-3.5 fill-current" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleSend}
+                    disabled={!followUp.trim() && attachments.length === 0}
+                    aria-label="Send"
+                    className="size-8 shrink-0 bg-primary text-primary-foreground grid place-items-center transition-all hover:bg-primary/85 active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                  >
+                    <ArrowUp className="size-4" />
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -763,13 +962,7 @@ export function WorkspaceView({
               </Select>
             )}
 
-            <div className="hidden lg:flex flex-1 min-w-[120px] h-8 items-center border border-edge bg-background px-2.5 text-xs font-mono text-muted-foreground truncate">
-              {currentApp
-                ? `${currentApp.slug}.emdash.site · ${currentApp.brief.mode}`
-                : "untitled.emdash.site"}
-            </div>
-
-            <div className="flex items-center gap-1.5 ml-auto">
+            <div className="flex flex-1 items-center justify-end gap-1.5 min-w-0">
               <Button
                 type="button"
                 variant="outline"
@@ -791,7 +984,7 @@ export function WorkspaceView({
                 className="border-edge bg-background hover:bg-muted font-mono uppercase text-xs gap-1.5"
               >
                 <Download className="size-3.5" />
-                <span>Export .zip</span>
+                <span>Export</span>
               </Button>
 
               <Button
@@ -800,15 +993,15 @@ export function WorkspaceView({
                 size="sm"
                 onClick={() => setPublishToastOpen(true)}
                 disabled={!currentApp}
-                title="Publish coming soon"
+                title="Publish"
                 className="border border-edge font-mono uppercase text-xs"
               >
-                Publish · Soon
+                Publish
               </Button>
             </div>
           </div>
 
-          <div className="flex-1 min-h-0 bg-muted flex justify-center overflow-auto relative">
+          <div className="flex-1 min-h-0 bg-background flex justify-center overflow-auto relative">
             {!currentApp && isGenerating ? (
               <div className="w-full h-full p-9 flex flex-col items-center gap-3 bg-card">
                 <Skeleton className="w-[40%] h-3.5" />
@@ -840,7 +1033,7 @@ export function WorkspaceView({
             ) : activeTab === "preview" ? (
               <div
                 className={cn(
-                  "h-full bg-white transition-[width] duration-200 max-w-full relative",
+                  "h-full bg-background transition-[width] duration-200 max-w-full relative",
                   frameWidthClass
                 )}
               >
@@ -848,7 +1041,7 @@ export function WorkspaceView({
                   <div className="absolute inset-x-0 top-0 h-0.5 bg-primary animate-pulse z-10" />
                 )}
                 {currentApp.brief.mode === "react-ts" && sandpackFiles ? (
-                  <div className="w-full h-full [&_.sp-wrapper]:h-full [&_.sp-layout]:h-full [&_.sp-layout]:border-0 [&_.sp-layout]:rounded-none [&_.sp-preview-container]:h-full [&_.sp-preview-iframe]:h-full">
+                  <div className="w-full h-full [&_.sp-wrapper]:h-full [&_.sp-layout]:h-full [&_.sp-layout]:border-0 [&_.sp-layout]:rounded-none [&_.sp-preview-container]:h-full [&_.sp-preview-iframe]:h-full [&_.sp-console]:hidden [&_.sp-terminal]:hidden [&_.sp-stack]:h-full">
                     <SandpackProvider
                       key={`${currentApp.version}-${reloadNonce}`}
                       template="react-ts"
@@ -876,44 +1069,111 @@ export function WorkspaceView({
                     title={currentApp.title}
                     srcDoc={staticSrcDoc}
                     sandbox="allow-scripts"
-                    className="w-full h-full border-0 bg-white block"
+                    className="w-full h-full border-0 bg-background block"
                   />
                 )}
               </div>
             ) : (
               <div className="w-full h-full flex flex-col sm:flex-row bg-card overflow-hidden">
-                {/* File Tree Sidebar */}
-                <div className="w-full sm:w-56 shrink-0 border-b sm:border-b-0 sm:border-r border-edge bg-background overflow-auto max-h-40 sm:max-h-none">
-                  <div className="px-3 py-2 border-b border-edge flex items-center gap-1.5 font-mono uppercase text-[10px] text-muted-foreground">
+                {/* File Tree Sidebar (File Manager Style) */}
+                <div className="w-full sm:w-64 shrink-0 border-b sm:border-b-0 sm:border-r border-edge bg-background overflow-auto max-h-48 sm:max-h-none flex flex-col">
+                  <div className="px-3 py-2 border-b border-edge flex items-center gap-1.5 font-mono uppercase text-[10px] text-muted-foreground tracking-wider">
                     <FolderOpen className="size-3.5 text-primary shrink-0" />
-                    <span>Project files ({fileList.length})</span>
+                    <span>Explorer · {fileList.length} files</span>
                   </div>
-                  <div className="p-1 flex sm:flex-col gap-0.5 overflow-x-auto sm:overflow-x-visible">
-                    {fileList.map((filePath) => (
-                      <button
-                        key={filePath}
-                        type="button"
-                        onClick={() => setSelectedFilePath(filePath)}
-                        className={cn(
-                          "flex items-center gap-1.5 px-2.5 py-1.5 text-left text-xs font-mono transition-colors whitespace-nowrap sm:whitespace-normal break-all cursor-pointer",
-                          selectedFilePath === filePath
-                            ? "bg-card text-primary border border-edge"
-                            : "text-muted-foreground hover:text-foreground border border-transparent"
-                        )}
-                      >
-                        <FileCode2 className="size-3.5 shrink-0" />
-                        <span>{filePath}</span>
-                      </button>
-                    ))}
+                  <div className="p-2 flex flex-col gap-2 overflow-y-auto">
+                    {fileList.filter(f => !f.includes("/")).length > 0 && (
+                      <div className="flex flex-col gap-0.5">
+                        <div className="px-2 py-1 font-mono text-[10px] uppercase text-muted-foreground flex items-center gap-1">
+                          <Folder className="size-3 text-amber-500" />
+                          <span>root</span>
+                        </div>
+                        <div className="pl-3 flex flex-col gap-0.5">
+                          {fileList.filter(f => !f.includes("/")).map((filePath) => (
+                            <button
+                              key={filePath}
+                              type="button"
+                              onClick={() => setSelectedFilePath(filePath)}
+                              className={cn(
+                                "flex items-center gap-2 px-2 py-1.5 text-left text-xs font-mono transition-colors rounded-sm truncate cursor-pointer",
+                                selectedFilePath === filePath
+                                  ? "bg-primary/10 text-primary font-medium border border-primary/30"
+                                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50 border border-transparent"
+                              )}
+                            >
+                              {getFileIcon(filePath)}
+                              <span className="truncate">{filePath}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {fileList.filter(f => f.startsWith("src/") && !f.startsWith("src/components/")).length > 0 && (
+                      <div className="flex flex-col gap-0.5">
+                        <div className="px-2 py-1 font-mono text-[10px] uppercase text-muted-foreground flex items-center gap-1">
+                          <Folder className="size-3 text-blue-500" />
+                          <span>src</span>
+                        </div>
+                        <div className="pl-3 flex flex-col gap-0.5">
+                          {fileList.filter(f => f.startsWith("src/") && !f.startsWith("src/components/")).map((filePath) => (
+                            <button
+                              key={filePath}
+                              type="button"
+                              onClick={() => setSelectedFilePath(filePath)}
+                              className={cn(
+                                "flex items-center gap-2 px-2 py-1.5 text-left text-xs font-mono transition-colors rounded-sm truncate cursor-pointer",
+                                selectedFilePath === filePath
+                                  ? "bg-primary/10 text-primary font-medium border border-primary/30"
+                                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50 border border-transparent"
+                              )}
+                            >
+                              {getFileIcon(filePath)}
+                              <span className="truncate">{filePath.replace(/^src\//, "")}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {fileList.filter(f => f.startsWith("src/components/")).length > 0 && (
+                      <div className="flex flex-col gap-0.5">
+                        <div className="px-2 py-1 font-mono text-[10px] uppercase text-muted-foreground flex items-center gap-1">
+                          <Folder className="size-3 text-primary" />
+                          <span>src/components</span>
+                        </div>
+                        <div className="pl-3 flex flex-col gap-0.5">
+                          {fileList.filter(f => f.startsWith("src/components/")).map((filePath) => (
+                            <button
+                              key={filePath}
+                              type="button"
+                              onClick={() => setSelectedFilePath(filePath)}
+                              className={cn(
+                                "flex items-center gap-2 px-2 py-1.5 text-left text-xs font-mono transition-colors rounded-sm truncate cursor-pointer",
+                                selectedFilePath === filePath
+                                  ? "bg-primary/10 text-primary font-medium border border-primary/30"
+                                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50 border border-transparent"
+                              )}
+                            >
+                              {getFileIcon(filePath)}
+                              <span className="truncate">{filePath.replace(/^src\/components\//, "")}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Read-Only Code Viewer */}
+                {/* Colorful Code Viewer */}
                 <div className="flex-1 min-w-0 min-h-0 flex flex-col bg-card overflow-hidden">
                   <div className="flex items-center justify-between gap-2 px-4 py-2 border-b border-edge bg-background shrink-0">
-                    <span className="font-mono text-xs text-foreground truncate">
-                      {selectedFilePath}
-                    </span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      {getFileIcon(selectedFilePath)}
+                      <span className="font-mono text-xs font-medium text-foreground truncate">
+                        {selectedFilePath}
+                      </span>
+                    </div>
                     <Button
                       type="button"
                       variant="outline"
@@ -934,10 +1194,8 @@ export function WorkspaceView({
                       )}
                     </Button>
                   </div>
-                  <div className="flex-1 overflow-auto">
-                    <pre className="p-4 text-xs leading-relaxed font-mono text-foreground whitespace-pre-wrap break-words">
-                      <code>{currentApp.files[selectedFilePath] ?? ""}</code>
-                    </pre>
+                  <div className="flex-1 overflow-auto bg-card">
+                    {renderColorfulCode(currentApp.files[selectedFilePath] ?? "", selectedFilePath)}
                   </div>
                 </div>
               </div>

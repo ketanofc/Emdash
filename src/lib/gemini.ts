@@ -60,6 +60,7 @@ export interface PipelineStreamOptions {
   files?: GeneratedFiles;
   runtimeErrors?: string[];
   attachments?: AttachedFile[];
+  signal?: AbortSignal;
 }
 
 export interface PipelineStreamResult {
@@ -112,6 +113,13 @@ async function fetchWithTimeout(
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  if (init.signal) {
+    if (init.signal.aborted) {
+      controller.abort();
+    } else {
+      init.signal.addEventListener("abort", () => controller.abort(), { once: true });
+    }
+  }
   try {
     const savedKey = await loadEncryptedApiKey();
     const headers = new Headers(init.headers || {});
@@ -120,6 +128,9 @@ async function fetchWithTimeout(
     }
     return await fetch(url, { ...init, headers, signal: controller.signal });
   } catch (err: unknown) {
+    if (init.signal?.aborted) {
+      throw err;
+    }
     if (
       (err instanceof DOMException && err.name === "AbortError") ||
       (err instanceof Error && err.name === "AbortError")
@@ -543,6 +554,7 @@ export async function runPipelineViaServer(
           runtimeErrors: options.runtimeErrors,
           attachments: options.attachments,
         }),
+        signal: options.signal,
       },
       PIPELINE_TIMEOUT_MS
     );
