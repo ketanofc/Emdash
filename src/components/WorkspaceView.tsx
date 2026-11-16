@@ -68,7 +68,6 @@ interface WorkspaceViewProps {
   isPro: boolean;
   isDark: boolean;
   onGoHome?: () => void;
-  onOpenPricing?: () => void;
   onOpenWallet?: () => void;
   onSendFollowUp: (prompt: string, attachments: AttachedFile[]) => void;
   onRuntimeError: (version: AppVersion, errors: string[]) => void;

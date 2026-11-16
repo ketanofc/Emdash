@@ -11,7 +11,6 @@ interface NavbarProps {
   onToggleTheme: () => void;
   onGoHome: () => void;
   onOpenTemplates: () => void;
-  onOpenPricing: () => void;
   onOpenSponsor?: () => void;
   onOpenWallet?: () => void;
   onOpenAdmin?: () => void;
@@ -26,7 +25,6 @@ export function Navbar({
   onToggleTheme,
   onGoHome,
   onOpenTemplates,
-  onOpenPricing,
   onOpenSponsor,
   onOpenAdmin,
   onOpenAuth,
@@ -101,13 +99,6 @@ export function Navbar({
             className="text-sm lg:text-[15px] tracking-tight font-sans text-foreground transition-colors hover:text-primary whitespace-nowrap shrink-0 cursor-pointer"
           >
             Templates
-          </button>
-          <button
-            type="button"
-            onClick={onOpenPricing}
-            className="text-sm lg:text-[15px] tracking-tight font-sans text-foreground transition-colors hover:text-primary whitespace-nowrap shrink-0 cursor-pointer"
-          >
-            Pricing
           </button>
           {onOpenSponsor && (
             <button
@@ -230,16 +221,6 @@ export function Navbar({
               className="group flex items-center justify-between px-4 py-3 text-left text-sm font-sans text-foreground transition-colors hover:bg-muted/60 hover:text-primary cursor-pointer"
             >
               <span>Templates</span>
-              <span className="size-6 border border-edge bg-background grid place-items-center text-muted-foreground transition-colors group-hover:border-primary group-hover:text-primary">
-                <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleNavAction(onOpenPricing)}
-              className="group flex items-center justify-between px-4 py-3 text-left text-sm font-sans text-foreground transition-colors hover:bg-muted/60 hover:text-primary cursor-pointer"
-            >
-              <span>Pricing</span>
               <span className="size-6 border border-edge bg-background grid place-items-center text-muted-foreground transition-colors group-hover:border-primary group-hover:text-primary">
                 <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
               </span>

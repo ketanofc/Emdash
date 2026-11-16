@@ -13,7 +13,6 @@ export type DocSection =
 interface FooterProps {
   onGoHome: () => void;
   onOpenTemplates?: () => void;
-  onOpenPricing: () => void;
   onOpenDocs: (section?: DocSection) => void;
   onOpenSponsor: () => void;
 }
@@ -78,7 +77,6 @@ const SOCIAL_LINKS: ReadonlyArray<{
 
 export function Footer({
   onGoHome,
-  onOpenPricing,
   onOpenDocs,
   onOpenSponsor,
 }: FooterProps) {
@@ -130,13 +128,6 @@ export function Footer({
                 className="text-xs font-medium text-foreground hover:text-primary transition-colors whitespace-nowrap shrink-0 cursor-pointer py-1"
               >
                 Sponsorship
-              </button>
-              <button
-                type="button"
-                onClick={onOpenPricing}
-                className="text-xs font-medium text-foreground hover:text-primary transition-colors whitespace-nowrap shrink-0 cursor-pointer py-1"
-              >
-                Pricing
               </button>
               <button
                 type="button"

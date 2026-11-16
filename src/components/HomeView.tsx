@@ -22,7 +22,7 @@ interface HomeViewProps {
   onPromptChange: (value: string) => void;
   onSubmitPrompt: (promptText: string, attachments: AttachedFile[]) => void;
   isPro: boolean;
-  onOpenPricing: () => void;
+  onOpenSponsor: () => void;
   onOpenWallet: () => void;
 }
 
@@ -39,7 +39,7 @@ export function HomeView({
   onPromptChange,
   onSubmitPrompt,
   isPro,
-  onOpenPricing,
+  onOpenSponsor,
   onOpenWallet,
 }: HomeViewProps) {
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
@@ -139,7 +139,7 @@ export function HomeView({
 
           <button
             type="button"
-            onClick={onOpenPricing}
+            onClick={onOpenWallet}
             className="inline-flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 border border-edge bg-background min-h-8 font-mono uppercase text-[11px] sm:text-xs px-2.5 sm:px-3 py-1 text-foreground hover:border-primary transition-colors cursor-pointer max-w-full text-center"
           >
             <span className="bg-primary text-primary-foreground px-1.5 py-0.5 text-[10px] font-semibold">
@@ -318,17 +318,10 @@ export function HomeView({
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
-                  onClick={onOpenPricing}
+                  onClick={onOpenSponsor}
                   className="h-7 px-2.5 border border-edge bg-card hover:border-primary hover:text-primary font-mono uppercase text-[10px] text-foreground transition-colors cursor-pointer"
                 >
-                  Learn more
-                </button>
-                <button
-                  type="button"
-                  onClick={onOpenPricing}
-                  className="h-7 px-2.5 border border-edge bg-background hover:border-neutral font-mono uppercase text-[10px] text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                >
-                  Go ad-free
+                  Sponsor Emdash
                 </button>
               </div>
             </div>
@@ -406,7 +399,7 @@ export function HomeView({
             {!isPro ? (
               <button
                 type="button"
-                onClick={onOpenPricing}
+                onClick={onOpenSponsor}
                 className="group bg-surface hover:bg-muted/60 p-5 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring flex flex-col justify-between cursor-pointer"
               >
                 <div>

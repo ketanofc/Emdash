@@ -6,7 +6,6 @@ import { WorkspaceView } from "@/src/components/WorkspaceView";
 import { Footer, type DocSection } from "@/src/components/Footer";
 import {
   AuthDialog,
-  PricingDialog,
   SponsorSlotDialog,
   SupportDocsDialog,
   TemplatesDialog,
@@ -106,13 +105,6 @@ export default function App() {
 
   const [user, setUser] = useState<UserSession | null>(null);
   const [wallet, setWallet] = useState<WalletSummary>(DEFAULT_WALLET);
-  const [planOverride, setPlanOverride] = useState<"free" | "pro">(() => {
-    try {
-      return localStorage.getItem("emdash_plan") === "pro" ? "pro" : "free";
-    } catch {
-      return "free";
-    }
-  });
 
   const [mode, setMode] = useState<"home" | "workspace" | "admin">(() => {
     if (typeof window !== "undefined" && window.location.pathname.startsWith("/admin")) {
@@ -128,7 +120,6 @@ export default function App() {
 
   // Dialog states
   const [walletOpen, setWalletOpen] = useState(false);
-  const [pricingOpen, setPricingOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [docsOpen, setDocsOpen] = useState(false);
@@ -192,7 +183,7 @@ export default function App() {
     );
   }, []);
 
-  const isPro = (user?.plan ?? planOverride) === "pro";
+  const isPro = (user?.plan ?? "free") === "pro";
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDark);
@@ -216,16 +207,6 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, []);
-
-  const handleSelectPlan = useCallback((plan: "free" | "pro") => {
-    setPlanOverride(plan);
-    try {
-      localStorage.setItem("emdash_plan", plan);
-    } catch {
-      // ignore
-    }
-    setUser((prev) => (prev ? { ...prev, plan } : null));
   }, []);
 
   const handleSignIn = useCallback(
@@ -494,7 +475,6 @@ export default function App() {
           onToggleTheme={() => setIsDark((d) => !d)}
           onGoHome={handleGoHome}
           onOpenTemplates={handleOpenTemplates}
-          onOpenPricing={() => setPricingOpen(true)}
           onOpenSponsor={() => setSponsorOpen(true)}
           onOpenWallet={() => setWalletOpen(true)}
           onOpenAdmin={user?.role === "admin" ? () => navigateToMode("admin") : undefined}
@@ -524,13 +504,12 @@ export default function App() {
             onPromptChange={setHomePrompt}
             onSubmitPrompt={(p, files) => void handleStartFromHome(p, files)}
             isPro={isPro}
-            onOpenPricing={() => setPricingOpen(true)}
+            onOpenSponsor={() => setSponsorOpen(true)}
             onOpenWallet={() => setWalletOpen(true)}
           />
           <Footer
             onGoHome={handleGoHome}
             onOpenTemplates={handleOpenTemplates}
-            onOpenPricing={() => setPricingOpen(true)}
             onOpenDocs={(section = "quickstart") => {
               setDocsSection(section);
               setDocsOpen(true);
@@ -548,7 +527,6 @@ export default function App() {
           isPro={isPro}
           isDark={isDark}
           onGoHome={handleGoHome}
-          onOpenPricing={() => setPricingOpen(true)}
           onOpenWallet={() => setWalletOpen(true)}
           onSendFollowUp={(p, files) => void handleFollowUp(p, files)}
           onRuntimeError={(ver, errs) => void handleRuntimeError(ver, errs)}
@@ -563,13 +541,6 @@ export default function App() {
         wallet={wallet}
         user={user}
         onOpenAuth={() => setAuthOpen(true)}
-      />
-
-      <PricingDialog
-        open={pricingOpen}
-        onOpenChange={setPricingOpen}
-        isPro={isPro}
-        onSelectPlan={handleSelectPlan}
       />
 
       <TemplatesDialog
