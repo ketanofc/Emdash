@@ -63,19 +63,25 @@ export async function fetchAuthState(): Promise<AuthMeState> {
       return { aal: "aal1", mfaEnrolled: false, user: null };
     }
 
-    const [{ data: profile }, { data: aalData }, { data: factorsData }] = await Promise.all([
+    const [profileRes, aalRes, factorsRes] = await Promise.all([
       client
         .from("profiles")
         .select("user_id, email, role, status")
         .eq("user_id", session.user.id)
-        .maybeSingle(),
-      client.auth.mfa.getAuthenticatorAssuranceLevel(),
-      client.auth.mfa.listFactors(),
+        .maybeSingle()
+        .then((res) => res, () => ({ data: null })),
+      client.auth.mfa
+        .getAuthenticatorAssuranceLevel()
+        .then((res) => res, () => ({ data: null })),
+      client.auth.mfa
+        .listFactors()
+        .then((res) => res, () => ({ data: null })),
     ]);
 
-    const verifiedTotp = (factorsData?.totp ?? []).some((f) => f.status === "verified");
+    const profile = profileRes.data;
+    const verifiedTotp = (factorsRes.data?.totp ?? []).some((f) => f.status === "verified");
     return {
-      aal: aalData?.currentLevel === "aal2" ? "aal2" : "aal1",
+      aal: aalRes.data?.currentLevel === "aal2" ? "aal2" : "aal1",
       mfaEnrolled: verifiedTotp,
       user: {
         id: session.user.id,
@@ -114,14 +120,21 @@ export async function fetchAuthState(): Promise<AuthMeState> {
   }
 }
 
+export type SignInAccountResult =
+  | { status: "signed_in"; user: UserSession }
+  | { status: "confirmation_required"; email: string };
+
 export async function signInAccount(params: {
   email: string;
   password?: string;
   name?: string;
   mode: "signin" | "signup";
-}): Promise<UserSession> {
+}): Promise<SignInAccountResult> {
   const client = getSupabaseClient();
   if (client) {
+    let authedUser: { id: string; email?: string; user_metadata?: Record<string, unknown>; identities?: unknown[] } | null = null;
+    let hasSession = false;
+
     if (params.mode === "signup") {
       const { data, error } = await client.auth.signUp({
         email: params.email,
@@ -129,16 +142,58 @@ export async function signInAccount(params: {
         options: { data: { name: params.name || params.email.split("@")[0] } },
       });
       if (error || !data.user) throw new Error(error?.message || "Signup failed.");
+      authedUser = data.user;
+      hasSession = Boolean(data.session);
+
+      if (!hasSession) {
+        if (Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+          throw new Error("An account with this email already exists. Please sign in instead.");
+        }
+        return {
+          status: "confirmation_required",
+          email: data.user.email || params.email,
+        };
+      }
     } else {
       const { data, error } = await client.auth.signInWithPassword({
         email: params.email,
         password: params.password || "",
       });
       if (error || !data.user) throw new Error(error?.message || "Sign in failed.");
+      authedUser = data.user;
+      hasSession = Boolean(data.session);
     }
+
     const state = await fetchAuthState();
-    if (!state.user) throw new Error("Profile initialization failed.");
-    return state.user;
+    if (state.user) {
+      return { status: "signed_in", user: state.user };
+    }
+
+    if (authedUser && hasSession) {
+      const { data: profile } = await client
+        .from("profiles")
+        .select("user_id, email, role, status")
+        .eq("user_id", authedUser.id)
+        .maybeSingle()
+        .then((res) => res, () => ({ data: null }));
+
+      return {
+        status: "signed_in",
+        user: {
+          id: authedUser.id,
+          email: profile?.email || authedUser.email || params.email,
+          name:
+            (authedUser.user_metadata?.name as string | undefined) ||
+            params.name ||
+            params.email.split("@")[0],
+          plan: "free",
+          role: profile?.role === "admin" ? "admin" : "user",
+          status: profile?.status === "suspended" ? "suspended" : "active",
+        },
+      };
+    }
+
+    throw new Error("Could not establish an active session. Please try signing in.");
   }
 
   const res = await apiFetch<{ token: string; user: UserSession }>("/api/auth/session", {
@@ -146,7 +201,7 @@ export async function signInAccount(params: {
     body: JSON.stringify({ email: params.email, name: params.name }),
   });
   setLocalSessionToken(res.token);
-  return res.user;
+  return { status: "signed_in", user: res.user };
 }
 
 export async function signOutAccount(): Promise<void> {

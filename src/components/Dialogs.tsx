@@ -193,6 +193,7 @@ export function AuthDialog({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const supabaseActive = isSupabaseConfigured();
@@ -209,15 +210,23 @@ export function AuthDialog({
       return;
     }
     setFormError(null);
+    setInfoMessage(null);
     setSubmitting(true);
     try {
-      const session = await signInAccount({
+      const result = await signInAccount({
         email: trimmedEmail,
         password,
         name: name.trim() || trimmedEmail.split("@")[0],
         mode: authMode,
       });
-      onSignIn(session);
+      if (result.status === "confirmation_required") {
+        setInfoMessage(
+          `Account created! Check ${result.email} to confirm your email, then sign in.`
+        );
+        setAuthMode("signin");
+        return;
+      }
+      onSignIn(result.user);
       onOpenChange(false);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Authentication failed.");
@@ -285,7 +294,10 @@ export function AuthDialog({
               <div className="grid grid-cols-2 border border-edge bg-background p-1 gap-1">
                 <button
                   type="button"
-                  onClick={() => setAuthMode("signin")}
+                  onClick={() => {
+                    setAuthMode("signin");
+                    setFormError(null);
+                  }}
                   className={cn(
                     "py-1.5 font-mono uppercase text-[11px] cursor-pointer transition-colors",
                     authMode === "signin"
@@ -297,7 +309,11 @@ export function AuthDialog({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setAuthMode("signup")}
+                  onClick={() => {
+                    setAuthMode("signup");
+                    setFormError(null);
+                    setInfoMessage(null);
+                  }}
                   className={cn(
                     "py-1.5 font-mono uppercase text-[11px] cursor-pointer transition-colors",
                     authMode === "signup"
@@ -352,6 +368,11 @@ export function AuthDialog({
                     className="h-9 border border-edge bg-background px-3 text-sm outline-none focus-visible:border-primary"
                   />
                 </label>
+              )}
+              {infoMessage && (
+                <div className="border border-primary/40 bg-primary/5 px-2.5 py-2 text-xs font-mono text-primary">
+                  {infoMessage}
+                </div>
               )}
               {formError && (
                 <div className="border border-destructive/40 bg-destructive/5 px-2.5 py-1.5 text-xs font-mono text-destructive">
