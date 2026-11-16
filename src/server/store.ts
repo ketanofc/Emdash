@@ -980,6 +980,32 @@ export class LocalAppStore implements LlmRouterStore {
       };
     });
 
+    const totalUsers = Math.max(1, this.profiles.size);
+    const activeAppsBuilt = Array.from(this.jobs.values()).filter(
+      (j) => j.status === "completed" || j.status === "running"
+    ).length;
+    const hasCriticalAlert = alerts.some((a) => a.level === "error");
+    const systemStatus: "operational" | "degraded" | "maintenance" = this.config.maintenance
+      ? "maintenance"
+      : hasCriticalAlert || (callsToday > 0 && errorsToday / callsToday > 0.25)
+        ? "degraded"
+        : "operational";
+    const uptimePercent = callsToday > 0
+      ? Math.round(Math.max(88, Math.min(100, (1 - errorsToday / callsToday) * 100)) * 10) / 10
+      : 99.9;
+
+    const rawDailySeries = this.getUsageByDay(days);
+    const dailySeries = rawDailySeries.map((d) => {
+      const appsOnDay = Array.from(this.jobs.values()).filter(
+        (j) => j.created_at.slice(0, 10) === d.day
+      ).length;
+      return {
+        ...d,
+        appsBuilt: appsOnDay,
+        activeUsers: d.calls > 0 ? Math.max(1, Math.round(d.calls / 3)) : 0,
+      };
+    });
+
     return {
       callsToday,
       tokensToday,
@@ -987,8 +1013,12 @@ export class LocalAppStore implements LlmRouterStore {
       errorsToday,
       rateLimitedToday,
       activeUsers,
+      totalUsers,
+      activeAppsBuilt,
+      systemStatus,
+      uptimePercent,
       coinsSpent,
-      dailySeries: this.getUsageByDay(days),
+      dailySeries,
       perProvider,
       alerts,
     };

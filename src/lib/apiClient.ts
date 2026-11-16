@@ -285,6 +285,10 @@ export interface AdminOverviewResponse {
   errorsToday: number;
   rateLimitedToday: number;
   activeUsers: number;
+  totalUsers?: number;
+  activeAppsBuilt?: number;
+  systemStatus?: "operational" | "degraded" | "maintenance";
+  uptimePercent?: number;
   coinsSpent: number;
   dailySeries: Array<{
     day: string;
@@ -294,6 +298,8 @@ export interface AdminOverviewResponse {
     input_tokens: number;
     output_tokens: number;
     total_tokens: number;
+    appsBuilt?: number;
+    activeUsers?: number;
   }>;
   perProvider: Array<{
     id: string;

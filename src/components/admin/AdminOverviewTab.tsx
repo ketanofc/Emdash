@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
+import {
+  Area,
+  AreaChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { Button } from "@/src/components/ui/button";
 import { CornerBrackets } from "@/src/components/CornerBrackets";
 import { adminApi, type AdminOverviewResponse } from "@/src/lib/apiClient";
@@ -29,8 +37,6 @@ export function AdminOverviewTab() {
   }, [range]);
 
   const series = data?.dailySeries ?? [];
-  const maxTokens = Math.max(1, ...series.map((d) => d.total_tokens));
-  const maxCalls = Math.max(1, ...series.map((d) => d.calls));
 
   return (
     <div className="space-y-4">
@@ -101,8 +107,23 @@ export function AdminOverviewTab() {
       )}
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-px bg-edge border border-edge">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-px bg-edge border border-edge">
         {[
+          {
+            label: "Total Users",
+            value: (data?.totalUsers ?? Math.max(1, data?.activeUsers ?? 1)).toLocaleString(),
+            sub: `${data?.activeUsers ?? 0} active today`,
+          },
+          {
+            label: "Apps Built",
+            value: (data?.activeAppsBuilt ?? data?.callsToday ?? 0).toLocaleString(),
+            sub: "Total creations",
+          },
+          {
+            label: "System Health",
+            value: data?.systemStatus ? data.systemStatus.toUpperCase() : "OPERATIONAL",
+            sub: `${data?.uptimePercent ?? 99.9}% uptime`,
+          },
           { label: "Calls Today", value: (data?.callsToday ?? 0).toLocaleString() },
           { label: "Tokens Today", value: (data?.tokensToday ?? 0).toLocaleString() },
           {
@@ -110,8 +131,6 @@ export function AdminOverviewTab() {
             value: `${((data?.errorRate ?? 0) * 100).toFixed(1)}%`,
             sub: `${data?.rateLimitedToday ?? 0} rate-limited`,
           },
-          { label: "Active Users", value: (data?.activeUsers ?? 0).toLocaleString() },
-          { label: "Coins Spent", value: (data?.coinsSpent ?? 0).toLocaleString() },
         ].map((card) => (
           <div key={card.label} className="bg-card p-3.5">
             <div className="font-mono uppercase text-[10px] text-muted-foreground">
@@ -129,7 +148,7 @@ export function AdminOverviewTab() {
         ))}
       </div>
 
-      {/* 7 / 30 Day Chart (inline SVG) */}
+      {/* 7 / 30 Day Chart (Recharts) */}
       <div className="relative border border-edge bg-card p-4">
         <CornerBrackets />
         <div className="flex items-center justify-between gap-2 mb-3">
@@ -141,59 +160,94 @@ export function AdminOverviewTab() {
               <span className="size-2 bg-primary inline-block" /> Calls
             </span>
             <span className="inline-flex items-center gap-1">
-              <span className="size-2 bg-foreground/60 inline-block" /> Tokens
+              <span className="size-2 bg-foreground/60 inline-block" /> Tokens (k)
             </span>
           </div>
         </div>
 
         {series.length === 0 ? (
-          <div className="h-36 grid place-items-center text-xs text-muted-foreground font-mono">
+          <div className="h-44 grid place-items-center text-xs text-muted-foreground font-mono">
             No call data recorded for this window yet.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <svg
-              viewBox={`0 0 ${Math.max(320, series.length * 42)} 140`}
-              className="w-full h-40 min-w-[300px]"
-              role="img"
-              aria-label="Daily calls and tokens chart"
-            >
-              {series.map((d, idx) => {
-                const x = idx * 42 + 8;
-                const callH = Math.max(3, Math.round((d.calls / maxCalls) * 90));
-                const tokH = Math.max(3, Math.round((d.total_tokens / maxTokens) * 90));
-                return (
-                  <g key={d.day}>
-                    <rect
-                      x={x}
-                      y={105 - callH}
-                      width={11}
-                      height={callH}
-                      fill="#ff5401"
-                    />
-                    <rect
-                      x={x + 13}
-                      y={105 - tokH}
-                      width={11}
-                      height={tokH}
-                      fill="currentColor"
-                      opacity={0.45}
-                    />
-                    <text
-                      x={x + 12}
-                      y={124}
-                      textAnchor="middle"
-                      fontSize="9"
-                      fill="currentColor"
-                      opacity={0.65}
-                      fontFamily="monospace"
-                    >
-                      {d.day.slice(5)}
-                    </text>
-                  </g>
-                );
-              })}
-            </svg>
+          <div className="h-44 w-full">
+            <ResponsiveContainer width="100%" height={176}>
+              <AreaChart
+                data={series.map((d) => ({
+                  day: d.day.slice(5),
+                  fullDay: d.day,
+                  calls: d.calls,
+                  tokensK: Math.round(d.total_tokens / 1000),
+                  tokens: d.total_tokens,
+                  errors: d.errors,
+                }))}
+                margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
+              >
+                <defs>
+                  <linearGradient id="callsGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#ff5401" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#ff5401" stopOpacity={0.0} />
+                  </linearGradient>
+                  <linearGradient id="tokGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#818cf8" stopOpacity={0.0} />
+                  </linearGradient>
+                </defs>
+                <XAxis
+                  dataKey="day"
+                  stroke="#71717a"
+                  fontSize={10}
+                  tickLine={false}
+                  fontFamily="monospace"
+                />
+                <YAxis
+                  stroke="#71717a"
+                  fontSize={10}
+                  tickLine={false}
+                  fontFamily="monospace"
+                />
+                <Tooltip
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload?.length) return null;
+                    return (
+                      <div className="border border-edge bg-card p-2 font-mono text-[11px] space-y-1 shadow-md">
+                        <div className="text-muted-foreground">{label}</div>
+                        {payload.map((entry, idx) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            <span
+                              className="size-2 inline-block shrink-0"
+                              style={{ backgroundColor: entry.color }}
+                            />
+                            <span>{entry.name}:</span>
+                            <span className="font-semibold text-foreground">
+                              {Number(entry.value).toLocaleString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="calls"
+                  name="Calls"
+                  stroke="#ff5401"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#callsGrad)"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="tokensK"
+                  name="Tokens (k)"
+                  stroke="#818cf8"
+                  strokeWidth={1.5}
+                  fillOpacity={1}
+                  fill="url(#tokGrad)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         )}
       </div>

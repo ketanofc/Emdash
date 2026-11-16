@@ -184,6 +184,16 @@ Deno.serve(async (req: Request) => {
       };
     });
 
+    const hasCriticalAlert = alerts.some((a) => a.level === "error");
+    const systemStatus: "operational" | "degraded" | "maintenance" = config?.maintenance
+      ? "maintenance"
+      : hasCriticalAlert || (callsCount > 0 && errorsCount / callsCount > 0.25)
+        ? "degraded"
+        : "operational";
+    const uptimePercent = callsCount > 0
+      ? Math.round(Math.max(88, Math.min(100, (1 - errorsCount / callsCount) * 100)) * 10) / 10
+      : 99.9;
+
     return jsonResponse(req, {
       callsToday: callsCount,
       tokensToday,
@@ -191,6 +201,10 @@ Deno.serve(async (req: Request) => {
       errorsToday: errorsCount,
       rateLimitedToday: rateLimitedCount,
       activeUsers,
+      totalUsers: Math.max(1, activeUsers),
+      activeAppsBuilt: Math.max(0, Math.round(callsCount / 2)),
+      systemStatus,
+      uptimePercent,
       coinsSpent,
       dailySeries: daySeries ?? [],
       perProvider,

@@ -28,6 +28,7 @@ import { AdminRoutingTab } from "./AdminRoutingTab";
 import { AdminUsersTab } from "./AdminUsersTab";
 import { AdminSettingsTab } from "./AdminSettingsTab";
 import { AdminAuditTab } from "./AdminAuditTab";
+import { AdminDashboardSection } from "./AdminDashboardSection";
 import { cn } from "@/src/lib/utils";
 
 type AdminTabId = "overview" | "providers" | "routing" | "users" | "settings" | "audit";
@@ -304,6 +305,9 @@ export default function AdminPage({ onBackHome, onOpenAuth }: AdminPageProps) {
             <span>Exit admin</span>
           </Button>
         </div>
+
+        {/* Recharts Key Metrics Dashboard Section */}
+        <AdminDashboardSection onNavigateTab={(tab) => setActiveTab(tab)} />
 
         {/* Navigation Tab Bar */}
         <div className="flex overflow-x-auto border-b border-edge bg-background px-2 sm:px-4">
