@@ -544,6 +544,7 @@ const DOC_TABS: Array<{ id: DocSection; label: string }> = [
   { id: "quickstart", label: "Quickstart" },
   { id: "prompting", label: "Prompting & Files" },
   { id: "quota", label: "Coins & Export" },
+  { id: "blog", label: "Blog" },
   { id: "privacy", label: "Privacy Policy" },
   { id: "terms", label: "Terms of Service" },
   { id: "security", label: "Security" },
@@ -699,6 +700,44 @@ export function SupportDocsDialog({
                 </h3>
                 <p>
                   Emdash is free to start and supported by clearly labeled sponsor slots. Automated scraping, abusive traffic, or attempts to bypass server safeguards are prohibited.
+                </p>
+              </div>
+            </>
+          )}
+
+          {section === "blog" && (
+            <>
+              <div>
+                <div className="font-mono uppercase text-[10px] text-primary mb-1">
+                  Engineering · Release Notes
+                </div>
+                <h3 className="text-sm font-semibold text-foreground mb-1">
+                  How Emdash turns one prompt into a checked web app
+                </h3>
+                <p>
+                  Every build moves through four deterministic stages—Design Brief, Architecture Plan, Full-File Synthesis, and Runtime Repair—so generated layouts maintain accessible contrast, design tokens, and responsive viewports out of the box.
+                </p>
+              </div>
+              <div>
+                <div className="font-mono uppercase text-[10px] text-primary mb-1">
+                  Product · Dash Coins
+                </div>
+                <h3 className="text-sm font-semibold text-foreground mb-1">
+                  Keeping full-stack app generation free to start
+                </h3>
+                <p>
+                  Daily Dash Coins refresh automatically every day with zero setup required. Failed generations refund spent coins automatically so you only pay for successful builds.
+                </p>
+              </div>
+              <div>
+                <div className="font-mono uppercase text-[10px] text-primary mb-1">
+                  Guide · Exports
+                </div>
+                <h3 className="text-sm font-semibold text-foreground mb-1">
+                  Shipping static HTML or React + TypeScript archives
+                </h3>
+                <p>
+                  Switch to the Code tab anytime to browse your file tree, copy individual modules, or download a complete .zip bundle ready for static hosting or Vite builds.
                 </p>
               </div>
             </>

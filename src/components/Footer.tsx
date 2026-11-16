@@ -1,18 +1,18 @@
-import { ArrowUpRight, LifeBuoy, Megaphone } from "lucide-react";
-import { Button } from "@/src/components/ui/button";
+import { ArrowUpRight, LifeBuoy } from "lucide-react";
 import { CornerBrackets } from "@/src/components/CornerBrackets";
 
 export type DocSection =
   | "quickstart"
   | "prompting"
   | "quota"
+  | "blog"
   | "privacy"
   | "terms"
   | "security";
 
 interface FooterProps {
   onGoHome: () => void;
-  onOpenTemplates: () => void;
+  onOpenTemplates?: () => void;
   onOpenPricing: () => void;
   onOpenDocs: (section?: DocSection) => void;
   onOpenSponsor: () => void;
@@ -43,7 +43,6 @@ const SOCIAL_LINKS = [
 
 export function Footer({
   onGoHome,
-  onOpenTemplates,
   onOpenPricing,
   onOpenDocs,
   onOpenSponsor,
@@ -55,7 +54,7 @@ export function Footer({
       <div className="screen-line-before screen-line-after relative w-full min-w-0 md:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto border-x border-edge bg-card">
         <CornerBrackets />
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-[1.4fr_1.05fr_0.85fr_0.95fr_1.35fr] gap-x-6 gap-y-8 px-4 sm:px-6 md:px-10 py-8 sm:py-10">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-[1.5fr_1.15fr_0.9fr_1fr] gap-x-6 gap-y-8 px-4 sm:px-6 md:px-10 py-8 sm:py-10">
           {/* Brand Column */}
           <div className="col-span-2 sm:col-span-3 lg:col-span-1 flex flex-col justify-between gap-5 min-w-0">
             <div>
@@ -92,10 +91,10 @@ export function Footer({
               </button>
               <button
                 type="button"
-                onClick={onOpenTemplates}
+                onClick={onOpenSponsor}
                 className="text-xs font-medium text-foreground hover:text-primary transition-colors whitespace-nowrap shrink-0 cursor-pointer py-1"
               >
-                Templates
+                Advertise
               </button>
               <button
                 type="button"
@@ -103,6 +102,13 @@ export function Footer({
                 className="text-xs font-medium text-foreground hover:text-primary transition-colors whitespace-nowrap shrink-0 cursor-pointer py-1"
               >
                 Pricing
+              </button>
+              <button
+                type="button"
+                onClick={() => onOpenDocs("blog")}
+                className="text-xs font-medium text-foreground hover:text-primary transition-colors whitespace-nowrap shrink-0 cursor-pointer py-1"
+              >
+                Blog
               </button>
             </nav>
           </div>
@@ -230,30 +236,6 @@ export function Footer({
             </ul>
           </div>
 
-          {/* Sponsor a Slot Column */}
-          <div className="col-span-2 sm:col-span-3 lg:col-span-1 min-w-0">
-            <div className="border border-dashed border-edge bg-background p-4 flex flex-col justify-between gap-3 h-full">
-              <div>
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground tracking-tight">
-                  <Megaphone className="size-3.5 text-primary shrink-0" aria-hidden="true" />
-                  <span>Sponsor a slot</span>
-                </div>
-                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                  Feature your developer tool or hosting platform directly below the builder composer or inside the template grid.
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={onOpenSponsor}
-                className="w-full sm:w-auto justify-between gap-2 border-edge bg-card hover:border-primary hover:text-primary text-xs font-medium cursor-pointer"
-              >
-                <span>Sponsor a slot</span>
-                <ArrowUpRight className="size-3.5 shrink-0" aria-hidden="true" />
-              </Button>
-            </div>
-          </div>
         </div>
 
         {/* Bottom Copyright Bar */}
