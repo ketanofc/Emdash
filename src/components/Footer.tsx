@@ -129,7 +129,7 @@ export function Footer({
                 onClick={onOpenSponsor}
                 className="text-xs font-medium text-foreground hover:text-primary transition-colors whitespace-nowrap shrink-0 cursor-pointer py-1"
               >
-                Advertise
+                Sponsorship
               </button>
               <button
                 type="button"

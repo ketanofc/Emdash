@@ -495,6 +495,7 @@ export default function App() {
           onGoHome={handleGoHome}
           onOpenTemplates={handleOpenTemplates}
           onOpenPricing={() => setPricingOpen(true)}
+          onOpenSponsor={() => setSponsorOpen(true)}
           onOpenWallet={() => setWalletOpen(true)}
           onOpenAdmin={user?.role === "admin" ? () => navigateToMode("admin") : undefined}
           onOpenAuth={() => setAuthOpen(true)}

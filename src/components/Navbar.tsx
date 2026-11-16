@@ -12,6 +12,7 @@ interface NavbarProps {
   onGoHome: () => void;
   onOpenTemplates: () => void;
   onOpenPricing: () => void;
+  onOpenSponsor?: () => void;
   onOpenWallet?: () => void;
   onOpenAdmin?: () => void;
   onOpenAuth: () => void;
@@ -26,6 +27,7 @@ export function Navbar({
   onGoHome,
   onOpenTemplates,
   onOpenPricing,
+  onOpenSponsor,
   onOpenAdmin,
   onOpenAuth,
   user,
@@ -107,6 +109,15 @@ export function Navbar({
           >
             Pricing
           </button>
+          {onOpenSponsor && (
+            <button
+              type="button"
+              onClick={onOpenSponsor}
+              className="text-sm lg:text-[15px] tracking-tight font-sans text-foreground transition-colors hover:text-primary whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              Sponsorship
+            </button>
+          )}
           {isAdmin && onOpenAdmin && (
             <button
               type="button"
@@ -233,6 +244,18 @@ export function Navbar({
                 <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
               </span>
             </button>
+            {onOpenSponsor && (
+              <button
+                type="button"
+                onClick={() => handleNavAction(onOpenSponsor)}
+                className="group flex items-center justify-between px-4 py-3 text-left text-sm font-sans text-foreground transition-colors hover:bg-muted/60 hover:text-primary cursor-pointer"
+              >
+                <span>Sponsorship</span>
+                <span className="size-6 border border-edge bg-background grid place-items-center text-muted-foreground transition-colors group-hover:border-primary group-hover:text-primary">
+                  <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                </span>
+              </button>
+            )}
             {isAdmin && onOpenAdmin && (
               <button
                 type="button"
