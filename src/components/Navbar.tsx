@@ -56,14 +56,15 @@ export function Navbar({
   const isAdmin = user?.role === "admin";
 
   return (
-    <aside className="sticky top-0 z-40 w-full max-w-full shrink-0 overflow-x-clip bg-background px-2 pt-2">
-      <header
-        className={cn(
-          "screen-line-before screen-line-after relative mx-auto flex h-12 sm:h-14 w-full min-w-0 max-w-full items-center justify-between gap-1.5 sm:gap-2 border-x border-edge bg-card px-2.5 sm:px-4 md:gap-4",
-          railWidthClass
-        )}
-      >
-        <CornerBrackets />
+    <MotionConfig reducedMotion="user">
+      <aside className="sticky top-0 z-40 w-full max-w-full shrink-0 overflow-x-clip bg-background px-2 pt-2">
+        <header
+          className={cn(
+            "screen-line-before screen-line-after relative mx-auto flex h-12 sm:h-14 w-full min-w-0 max-w-full items-center justify-between gap-1.5 sm:gap-2 border-x border-edge bg-card px-2.5 sm:px-4 md:gap-4",
+            railWidthClass
+          )}
+        >
+          <CornerBrackets />
 
         <div className="flex min-w-0 items-center justify-start md:flex-1">
           <button
@@ -192,7 +193,7 @@ export function Navbar({
             onClick={() => setMobileMenuOpen((open) => !open)}
             aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
             aria-expanded={mobileMenuOpen}
-            className="size-8 sm:size-9 border-edge bg-background hover:bg-muted md:hidden shrink-0"
+            className="size-8 sm:size-9 border-edge bg-background hover:bg-muted md:hidden shrink-0 touch-manipulation"
           >
             <span aria-hidden="true" className="relative flex items-center justify-center size-4">
               <motion.span
@@ -218,93 +219,83 @@ export function Navbar({
             </span>
           </Button>
         </div>
-      </header>
+        </header>
 
-      <MotionConfig reducedMotion="user">
-        <AnimatePresence initial={false}>
-          {mobileMenuOpen && (
-            <motion.nav
-              key="mobile-nav"
-              aria-label="Mobile navigation"
-              initial={{ opacity: 0, height: 0, y: -4 }}
-              animate={{ opacity: 1, height: "auto", y: 0 }}
-              exit={{ opacity: 0, height: 0, y: -4 }}
-              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-              className={cn(
-                "md:hidden relative mx-auto w-full overflow-hidden border-x border-b border-edge bg-card",
-                railWidthClass
-              )}
-            >
-              <div className="grid grid-cols-1 divide-y divide-edge">
-                <motion.button
-                  type="button"
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.16, delay: 0.02, ease: [0.16, 1, 0.3, 1] }}
-                  onClick={() => handleNavAction(onGoHome)}
+        <div
+          aria-hidden={!mobileMenuOpen}
+          inert={!mobileMenuOpen || undefined}
+          className={cn(
+            "md:hidden grid transition-[grid-template-rows,opacity] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+            mobileMenuOpen
+              ? "grid-rows-[1fr] opacity-100"
+              : "grid-rows-[0fr] opacity-0 pointer-events-none"
+          )}
+        >
+          <nav
+            aria-label="Mobile navigation"
+            className={cn(
+              "min-h-0 overflow-hidden relative mx-auto w-full border-x bg-card",
+              mobileMenuOpen ? "border-b border-edge" : "border-b-0 border-edge",
+              railWidthClass
+            )}
+          >
+            <div className="grid grid-cols-1 divide-y divide-edge">
+              <button
+                type="button"
+                onClick={() => handleNavAction(onGoHome)}
+                className={cn(
+                  "group flex items-center justify-between px-4 py-3 text-left text-sm font-sans transition-colors hover:bg-muted/60 cursor-pointer touch-manipulation",
+                  mode === "home" ? "text-primary font-medium" : "text-foreground"
+                )}
+              >
+                <span>Home</span>
+                <span
                   className={cn(
-                    "group flex items-center justify-between px-4 py-3 text-left text-sm font-sans transition-colors hover:bg-muted/60 cursor-pointer",
-                    mode === "home" ? "text-primary font-medium" : "text-foreground"
+                    "size-6 border border-edge bg-background grid place-items-center transition-colors group-hover:border-primary group-hover:text-primary",
+                    mode === "home" ? "border-primary/50 text-primary" : "text-muted-foreground"
                   )}
                 >
-                  <span>Home</span>
-                  <span
-                    className={cn(
-                      "size-6 border border-edge bg-background grid place-items-center transition-colors group-hover:border-primary group-hover:text-primary",
-                      mode === "home" ? "border-primary/50 text-primary" : "text-muted-foreground"
-                    )}
-                  >
-                    <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-                  </span>
-                </motion.button>
-                <motion.button
+                  <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleNavAction(onOpenTemplates)}
+                className="group flex items-center justify-between px-4 py-3 text-left text-sm font-sans text-foreground transition-colors hover:bg-muted/60 hover:text-primary cursor-pointer touch-manipulation"
+              >
+                <span>Templates</span>
+                <span className="size-6 border border-edge bg-background grid place-items-center text-muted-foreground transition-colors group-hover:border-primary group-hover:text-primary">
+                  <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                </span>
+              </button>
+              {onOpenSponsor && (
+                <button
                   type="button"
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.16, delay: 0.05, ease: [0.16, 1, 0.3, 1] }}
-                  onClick={() => handleNavAction(onOpenTemplates)}
-                  className="group flex items-center justify-between px-4 py-3 text-left text-sm font-sans text-foreground transition-colors hover:bg-muted/60 hover:text-primary cursor-pointer"
+                  onClick={() => handleNavAction(onOpenSponsor)}
+                  className="group flex items-center justify-between px-4 py-3 text-left text-sm font-sans text-foreground transition-colors hover:bg-muted/60 hover:text-primary cursor-pointer touch-manipulation"
                 >
-                  <span>Templates</span>
+                  <span>Sponsorship</span>
                   <span className="size-6 border border-edge bg-background grid place-items-center text-muted-foreground transition-colors group-hover:border-primary group-hover:text-primary">
                     <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                   </span>
-                </motion.button>
-                {onOpenSponsor && (
-                  <motion.button
-                    type="button"
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.16, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
-                    onClick={() => handleNavAction(onOpenSponsor)}
-                    className="group flex items-center justify-between px-4 py-3 text-left text-sm font-sans text-foreground transition-colors hover:bg-muted/60 hover:text-primary cursor-pointer"
-                  >
-                    <span>Sponsorship</span>
-                    <span className="size-6 border border-edge bg-background grid place-items-center text-muted-foreground transition-colors group-hover:border-primary group-hover:text-primary">
-                      <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-                    </span>
-                  </motion.button>
-                )}
-                {isAdmin && onOpenAdmin && (
-                  <motion.button
-                    type="button"
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.16, delay: 0.11, ease: [0.16, 1, 0.3, 1] }}
-                    onClick={() => handleNavAction(onOpenAdmin)}
-                    className="group flex items-center justify-between px-4 py-3 text-left text-sm font-sans text-primary transition-colors hover:bg-muted/60 cursor-pointer"
-                  >
-                    <span>Admin</span>
-                    <span className="size-6 border border-primary/50 bg-background grid place-items-center text-primary">
-                      <ArrowUpRight className="size-3.5" />
-                    </span>
-                  </motion.button>
-                )}
-              </div>
-            </motion.nav>
-          )}
-        </AnimatePresence>
-      </MotionConfig>
-    </aside>
+                </button>
+              )}
+              {isAdmin && onOpenAdmin && (
+                <button
+                  type="button"
+                  onClick={() => handleNavAction(onOpenAdmin)}
+                  className="group flex items-center justify-between px-4 py-3 text-left text-sm font-sans text-primary transition-colors hover:bg-muted/60 cursor-pointer touch-manipulation"
+                >
+                  <span>Admin</span>
+                  <span className="size-6 border border-primary/50 bg-background grid place-items-center text-primary">
+                    <ArrowUpRight className="size-3.5" />
+                  </span>
+                </button>
+              )}
+            </div>
+          </nav>
+        </div>
+      </aside>
+    </MotionConfig>
   );
 }
