@@ -1,4 +1,6 @@
+import type React from "react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import JSZip from "jszip";
 import { Navbar } from "@/src/components/Navbar";
 import { HomeView } from "@/src/components/HomeView";
@@ -232,6 +234,69 @@ export default function App() {
       // ignore
     }
   }, [isDark]);
+
+  const handleToggleTheme = useCallback(
+    (e?: React.MouseEvent<HTMLButtonElement>) => {
+      const next = !isDark;
+      const prefersReduced =
+        typeof window !== "undefined" &&
+        window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      const doc = document as Document & {
+        startViewTransition?: (cb: () => void) => { ready: Promise<void> };
+      };
+
+      if (!doc.startViewTransition || prefersReduced) {
+        setIsDark(next);
+        return;
+      }
+
+      const rect = e?.currentTarget?.getBoundingClientRect();
+      const x =
+        e && e.clientX > 0
+          ? e.clientX
+          : rect
+            ? rect.left + rect.width / 2
+            : window.innerWidth - 48;
+      const y =
+        e && e.clientY > 0
+          ? e.clientY
+          : rect
+            ? rect.top + rect.height / 2
+            : 32;
+      const endRadius = Math.hypot(
+        Math.max(x, window.innerWidth - x),
+        Math.max(y, window.innerHeight - y)
+      );
+
+      const transition = doc.startViewTransition(() => {
+        document.documentElement.classList.toggle("dark", next);
+        flushSync(() => {
+          setIsDark(next);
+        });
+      });
+
+      void transition.ready
+        .then(() => {
+          document.documentElement.animate(
+            {
+              clipPath: [
+                `circle(0px at ${x}px ${y}px)`,
+                `circle(${endRadius}px at ${x}px ${y}px)`,
+              ],
+            },
+            {
+              duration: 450,
+              easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+              pseudoElement: "::view-transition-new(root)",
+            }
+          );
+        })
+        .catch(() => {
+          // ignore animation errors in unsupported contexts
+        });
+    },
+    [isDark]
+  );
 
   useEffect(() => {
     let active = true;
@@ -519,7 +584,7 @@ export default function App() {
         <Navbar
           mode={mode}
           isDark={isDark}
-          onToggleTheme={() => setIsDark((d) => !d)}
+          onToggleTheme={handleToggleTheme}
           onGoHome={handleGoHome}
           onOpenTemplates={handleOpenTemplates}
           onOpenSponsor={() => setSponsorOpen(true)}
