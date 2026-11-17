@@ -217,6 +217,47 @@ export async function signOutAccount(): Promise<void> {
   setLocalSessionToken(null);
 }
 
+export async function signInWithGoogleOAuth(redirectPath = "/"): Promise<void> {
+  const client = getSupabaseClient();
+  if (!client) {
+    throw new Error(
+      "Google sign-in requires Supabase authentication to be configured for this environment."
+    );
+  }
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const redirectTo = origin ? `${origin}${redirectPath}` : undefined;
+  const { data, error } = await client.auth.signInWithOAuth({
+    provider: "google",
+    options: redirectTo ? { redirectTo } : undefined,
+  });
+  if (error) {
+    throw new Error(error.message || "Could not start Google authentication.");
+  }
+  if (!data?.url) {
+    throw new Error("Google OAuth redirect URL was not returned.");
+  }
+}
+
+export async function requestPasswordReset(email: string): Promise<void> {
+  const trimmed = email.trim();
+  if (!trimmed || !trimmed.includes("@")) {
+    throw new Error("Enter a valid email address.");
+  }
+  const client = getSupabaseClient();
+  if (!client) {
+    throw new Error(
+      "Password reset emails require Supabase authentication to be configured."
+    );
+  }
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const { error } = await client.auth.resetPasswordForEmail(trimmed, {
+    redirectTo: origin ? `${origin}/signin` : undefined,
+  });
+  if (error) {
+    throw new Error(error.message || "Could not send password reset email.");
+  }
+}
+
 export async function enrollTotpFactor(): Promise<{
   factorId?: string;
   secret: string;

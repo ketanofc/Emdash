@@ -3,6 +3,7 @@ import JSZip from "jszip";
 import { Navbar } from "@/src/components/Navbar";
 import { HomeView } from "@/src/components/HomeView";
 import { WorkspaceView } from "@/src/components/WorkspaceView";
+import { AuthPage } from "@/src/components/AuthPage";
 import { Footer, type DocSection } from "@/src/components/Footer";
 import {
   AuthDialog,
@@ -17,7 +18,7 @@ import {
   runPipelineViaServer,
 } from "@/src/lib/gemini";
 import { fetchAuthState, fetchWalletSummary } from "@/src/lib/apiClient";
-import { hydrateSupabaseConfig } from "@/src/lib/supabase";
+import { getSupabaseClient, hydrateSupabaseConfig } from "@/src/lib/supabase";
 import {
   clearVersionsFromDb,
   loadVersionsFromDb,
@@ -91,6 +92,13 @@ function formatFriendlyPipelineError(err: unknown): string {
   return err instanceof Error ? err.message : "Failed to build application.";
 }
 
+function getModeFromPath(pathname: string): "home" | "admin" | "signin" | "signup" {
+  if (pathname.startsWith("/admin")) return "admin";
+  if (pathname.startsWith("/signup") || pathname.startsWith("/register")) return "signup";
+  if (pathname.startsWith("/signin") || pathname.startsWith("/login")) return "signin";
+  return "home";
+}
+
 export default function App() {
   const [isDark, setIsDark] = useState<boolean>(() => {
     try {
@@ -106,9 +114,9 @@ export default function App() {
   const [user, setUser] = useState<UserSession | null>(null);
   const [wallet, setWallet] = useState<WalletSummary>(DEFAULT_WALLET);
 
-  const [mode, setMode] = useState<"home" | "workspace" | "admin">(() => {
-    if (typeof window !== "undefined" && window.location.pathname.startsWith("/admin")) {
-      return "admin";
+  const [mode, setMode] = useState<"home" | "workspace" | "admin" | "signin" | "signup">(() => {
+    if (typeof window !== "undefined") {
+      return getModeFromPath(window.location.pathname);
     }
     return "home";
   });
@@ -146,30 +154,61 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    void refreshSessionAndWallet();
+    let active = true;
+    let unsubscribe: (() => void) | undefined;
+
+    void (async () => {
+      await refreshSessionAndWallet();
+      if (!active) return;
+      const client = getSupabaseClient();
+      if (client) {
+        const { data } = client.auth.onAuthStateChange((event) => {
+          if (
+            event === "SIGNED_IN" ||
+            event === "SIGNED_OUT" ||
+            event === "TOKEN_REFRESHED" ||
+            event === "USER_UPDATED"
+          ) {
+            void refreshSessionAndWallet();
+          }
+        });
+        unsubscribe = () => data.subscription.unsubscribe();
+      }
+    })();
+
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
   }, [refreshSessionAndWallet]);
 
   useEffect(() => {
     const onPopState = () => {
-      if (window.location.pathname.startsWith("/admin")) {
-        setMode("admin");
-      } else {
-        setMode("home");
-      }
+      setMode(getModeFromPath(window.location.pathname));
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  const navigateToMode = useCallback((nextMode: "home" | "workspace" | "admin") => {
-    setMode(nextMode);
-    if (typeof window !== "undefined") {
-      const targetPath = nextMode === "admin" ? "/admin" : "/";
-      if (window.location.pathname !== targetPath) {
-        window.history.pushState({}, "", targetPath);
+  const navigateToMode = useCallback(
+    (nextMode: "home" | "workspace" | "admin" | "signin" | "signup") => {
+      setMode(nextMode);
+      if (typeof window !== "undefined") {
+        const targetPath =
+          nextMode === "admin"
+            ? "/admin"
+            : nextMode === "signin"
+              ? "/signin"
+              : nextMode === "signup"
+                ? "/signup"
+                : "/";
+        if (window.location.pathname !== targetPath) {
+          window.history.pushState({}, "", targetPath);
+        }
       }
-    }
-  }, []);
+    },
+    []
+  );
 
   const handlePause = useCallback(() => {
     abortControllerRef.current?.abort();
@@ -217,6 +256,14 @@ export default function App() {
     },
     [isPro, refreshSessionAndWallet]
   );
+
+  const handleOpenAuth = useCallback(() => {
+    if (user) {
+      setAuthOpen(true);
+    } else {
+      navigateToMode("signin");
+    }
+  }, [navigateToMode, user]);
 
   const handleSignOut = useCallback(() => {
     setUser(null);
@@ -478,13 +525,38 @@ export default function App() {
           onOpenSponsor={() => setSponsorOpen(true)}
           onOpenWallet={() => setWalletOpen(true)}
           onOpenAdmin={user?.role === "admin" ? () => navigateToMode("admin") : undefined}
-          onOpenAuth={() => setAuthOpen(true)}
+          onOpenAuth={handleOpenAuth}
           user={user}
           walletBalance={wallet.balance}
         />
       )}
 
-      {mode === "admin" ? (
+      {mode === "signin" || mode === "signup" ? (
+        <>
+          <AuthPage
+            authMode={mode}
+            onChangeMode={(next) => navigateToMode(next)}
+            onSuccess={(session) => {
+              handleSignIn(session);
+              navigateToMode("home");
+            }}
+            onOpenDocs={(section) => {
+              setDocsSection(section);
+              setDocsOpen(true);
+            }}
+            onOpenWallet={() => setWalletOpen(true)}
+          />
+          <Footer
+            onGoHome={handleGoHome}
+            onOpenTemplates={handleOpenTemplates}
+            onOpenDocs={(section = "quickstart") => {
+              setDocsSection(section);
+              setDocsOpen(true);
+            }}
+            onOpenSponsor={() => setSponsorOpen(true)}
+          />
+        </>
+      ) : mode === "admin" ? (
         <Suspense
           fallback={
             <main className="flex-1 grid place-items-center p-8 font-mono text-xs text-muted-foreground">
@@ -494,7 +566,7 @@ export default function App() {
         >
           <LazyAdminPage
             onBackHome={() => navigateToMode("home")}
-            onOpenAuth={() => setAuthOpen(true)}
+            onOpenAuth={handleOpenAuth}
           />
         </Suspense>
       ) : mode === "home" ? (
@@ -540,7 +612,7 @@ export default function App() {
         onOpenChange={setWalletOpen}
         wallet={wallet}
         user={user}
-        onOpenAuth={() => setAuthOpen(true)}
+        onOpenAuth={handleOpenAuth}
       />
 
       <TemplatesDialog

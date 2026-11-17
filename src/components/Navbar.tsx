@@ -6,7 +6,7 @@ import type { UserSession } from "@/src/types";
 import { cn } from "@/src/lib/utils";
 
 interface NavbarProps {
-  mode: "home" | "workspace" | "admin";
+  mode: "home" | "workspace" | "admin" | "signin" | "signup";
   isDark: boolean;
   onToggleTheme: () => void;
   onGoHome: () => void;
@@ -42,7 +42,7 @@ export function Navbar({
   }, [mobileMenuOpen]);
 
   const railWidthClass =
-    mode === "home"
+    mode === "home" || mode === "signin" || mode === "signup"
       ? "md:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl"
       : "max-w-full";
 
@@ -149,7 +149,7 @@ export function Navbar({
                 {user.name}
               </span>
             </Button>
-          ) : (
+          ) : mode !== "signin" && mode !== "signup" ? (
             <Button
               size="sm"
               onClick={() => handleNavAction(onOpenAuth)}
@@ -157,7 +157,7 @@ export function Navbar({
             >
               Sign in
             </Button>
-          )}
+          ) : null}
 
           <Button
             type="button"
