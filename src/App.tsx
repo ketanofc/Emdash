@@ -6,10 +6,11 @@ import { Navbar } from "@/src/components/Navbar";
 import { HomeView } from "@/src/components/HomeView";
 import { WorkspaceView } from "@/src/components/WorkspaceView";
 import { AuthPage } from "@/src/components/AuthPage";
+import { SponsorshipPage } from "@/src/components/SponsorshipPage";
+import { WebAgentPage } from "@/src/components/web/WebAgentPage";
 import { Footer, type DocSection } from "@/src/components/Footer";
 import {
   AuthDialog,
-  SponsorSlotDialog,
   SupportDocsDialog,
   TemplatesDialog,
   WalletDialog,
@@ -94,8 +95,10 @@ function formatFriendlyPipelineError(err: unknown): string {
   return err instanceof Error ? err.message : "Failed to build application.";
 }
 
-function getModeFromPath(pathname: string): "home" | "admin" | "signin" | "signup" {
+function getModeFromPath(pathname: string): "home" | "admin" | "signin" | "signup" | "web" | "sponsorship" {
   if (pathname.startsWith("/admin")) return "admin";
+  if (pathname.startsWith("/web")) return "web";
+  if (pathname.startsWith("/sponsorship") || pathname.startsWith("/sponsor") || pathname.startsWith("/advertisers")) return "sponsorship";
   if (pathname.startsWith("/signup") || pathname.startsWith("/register")) return "signup";
   if (pathname.startsWith("/signin") || pathname.startsWith("/login")) return "signin";
   return "home";
@@ -116,7 +119,7 @@ export default function App() {
   const [user, setUser] = useState<UserSession | null>(null);
   const [wallet, setWallet] = useState<WalletSummary>(DEFAULT_WALLET);
 
-  const [mode, setMode] = useState<"home" | "workspace" | "admin" | "signin" | "signup">(() => {
+  const [mode, setMode] = useState<"home" | "workspace" | "admin" | "signin" | "signup" | "web" | "sponsorship">(() => {
     if (typeof window !== "undefined") {
       return getModeFromPath(window.location.pathname);
     }
@@ -134,7 +137,6 @@ export default function App() {
   const [authOpen, setAuthOpen] = useState(false);
   const [docsOpen, setDocsOpen] = useState(false);
   const [docsSection, setDocsSection] = useState<DocSection>("quickstart");
-  const [sponsorOpen, setSponsorOpen] = useState(false);
 
   const autoRepairedVersionsRef = useRef<Set<number>>(new Set());
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -193,17 +195,21 @@ export default function App() {
   }, []);
 
   const navigateToMode = useCallback(
-    (nextMode: "home" | "workspace" | "admin" | "signin" | "signup") => {
+    (nextMode: "home" | "workspace" | "admin" | "signin" | "signup" | "web" | "sponsorship") => {
       setMode(nextMode);
       if (typeof window !== "undefined") {
         const targetPath =
           nextMode === "admin"
             ? "/admin"
-            : nextMode === "signin"
-              ? "/signin"
-              : nextMode === "signup"
-                ? "/signup"
-                : "/";
+            : nextMode === "web"
+              ? "/web"
+              : nextMode === "sponsorship"
+                ? "/sponsorship"
+                : nextMode === "signin"
+                  ? "/signin"
+                  : nextMode === "signup"
+                    ? "/signup"
+                    : "/";
         if (window.location.pathname !== targetPath) {
           window.history.pushState({}, "", targetPath);
         }
@@ -541,6 +547,12 @@ export default function App() {
     setMessages([]);
   };
 
+  const handleOpenSponsorship = () => {
+    if (isGenerating) return;
+    navigateToMode("sponsorship");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const handleOpenTemplates = () => {
     if (mode === "home") {
       document
@@ -575,19 +587,20 @@ export default function App() {
   return (
     <div
       className={
-        mode === "workspace"
+        mode === "workspace" || mode === "web"
           ? "h-full w-full max-w-full overflow-x-clip flex flex-col bg-background text-foreground"
           : "min-h-full w-full max-w-full overflow-x-clip flex flex-col bg-background text-foreground"
       }
     >
-      {mode !== "workspace" && (
+      {mode !== "workspace" && mode !== "web" && (
         <Navbar
           mode={mode}
           isDark={isDark}
           onToggleTheme={handleToggleTheme}
           onGoHome={handleGoHome}
           onOpenTemplates={handleOpenTemplates}
-          onOpenSponsor={() => setSponsorOpen(true)}
+          onOpenWebAgent={() => navigateToMode("web")}
+          onOpenSponsor={handleOpenSponsorship}
           onOpenWallet={() => setWalletOpen(true)}
           onOpenAdmin={user?.role === "admin" ? () => navigateToMode("admin") : undefined}
           onOpenAuth={handleOpenAuth}
@@ -614,11 +627,12 @@ export default function App() {
           <Footer
             onGoHome={handleGoHome}
             onOpenTemplates={handleOpenTemplates}
+            onOpenWebAgent={() => navigateToMode("web")}
             onOpenDocs={(section = "quickstart") => {
               setDocsSection(section);
               setDocsOpen(true);
             }}
-            onOpenSponsor={() => setSponsorOpen(true)}
+            onOpenSponsor={handleOpenSponsorship}
           />
         </>
       ) : mode === "admin" ? (
@@ -634,6 +648,29 @@ export default function App() {
             onOpenAuth={handleOpenAuth}
           />
         </Suspense>
+      ) : mode === "web" ? (
+        <WebAgentPage
+          isDark={isDark}
+          onToggleTheme={handleToggleTheme}
+          onGoHome={handleGoHome}
+        />
+      ) : mode === "sponsorship" ? (
+        <>
+          <SponsorshipPage
+            onGoHome={handleGoHome}
+            onOpenWebAgent={() => navigateToMode("web")}
+          />
+          <Footer
+            onGoHome={handleGoHome}
+            onOpenTemplates={handleOpenTemplates}
+            onOpenWebAgent={() => navigateToMode("web")}
+            onOpenDocs={(section = "quickstart") => {
+              setDocsSection(section);
+              setDocsOpen(true);
+            }}
+            onOpenSponsor={handleOpenSponsorship}
+          />
+        </>
       ) : mode === "home" ? (
         <>
           <HomeView
@@ -641,17 +678,19 @@ export default function App() {
             onPromptChange={setHomePrompt}
             onSubmitPrompt={(p, files) => void handleStartFromHome(p, files)}
             isPro={isPro}
-            onOpenSponsor={() => setSponsorOpen(true)}
+            onOpenSponsor={handleOpenSponsorship}
             onOpenWallet={() => setWalletOpen(true)}
+            onOpenWebAgent={() => navigateToMode("web")}
           />
           <Footer
             onGoHome={handleGoHome}
             onOpenTemplates={handleOpenTemplates}
+            onOpenWebAgent={() => navigateToMode("web")}
             onOpenDocs={(section = "quickstart") => {
               setDocsSection(section);
               setDocsOpen(true);
             }}
-            onOpenSponsor={() => setSponsorOpen(true)}
+            onOpenSponsor={handleOpenSponsorship}
           />
         </>
       ) : (
@@ -699,11 +738,6 @@ export default function App() {
         onOpenChange={setDocsOpen}
         section={docsSection}
         onSectionChange={setDocsSection}
-      />
-
-      <SponsorSlotDialog
-        open={sponsorOpen}
-        onOpenChange={setSponsorOpen}
       />
     </div>
   );

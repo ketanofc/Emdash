@@ -2,6 +2,7 @@ import "dotenv/config";
 import crypto from "node:crypto";
 import express from "express";
 import fs from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,8 +13,26 @@ import { LocalAppStore, resolveServerMasterSecret } from "./src/server/store.ts"
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PORT = Number(process.env.PORT) || 3000;
 const isProd = process.env.NODE_ENV === "production";
+
+function resolvePort(): number {
+  const portFlagIdx = process.argv.findIndex((arg) => arg === "--port" || arg === "-p");
+  if (portFlagIdx !== -1 && process.argv[portFlagIdx + 1]) {
+    const cliPort = Number(process.argv[portFlagIdx + 1]);
+    if (Number.isFinite(cliPort) && cliPort > 0) return cliPort;
+  }
+  const inlineFlag = process.argv.find((arg) => arg.startsWith("--port="));
+  if (inlineFlag) {
+    const cliPort = Number(inlineFlag.slice("--port=".length));
+    if (Number.isFinite(cliPort) && cliPort > 0) return cliPort;
+  }
+  if (!isProd || (process.env.NGINX_PORT && process.env.PORT === process.env.NGINX_PORT)) {
+    return Number(process.env.DEFAULT_APP_PORT) || 3000;
+  }
+  return Number(process.env.PORT) || 3000;
+}
+
+const PORT = resolvePort();
 
 interface PublishedSite {
   slug: string;
@@ -197,14 +216,40 @@ async function startServer() {
     return;
   }
 
+  const httpServer = http.createServer(app);
+
   if (!isProd) {
-    const vitePkg = "vite";
-    const { createServer: createViteServer } = await import(/* @vite-ignore */ vitePkg);
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
+    let viteMiddleware: express.RequestHandler | null = null;
+    const viteReady = (async () => {
+      const vitePkg = "vite";
+      const { createServer: createViteServer } = await import(/* @vite-ignore */ vitePkg);
+      const vite = await createViteServer({
+        server: {
+          middlewareMode: true,
+          hmr: process.env.DISABLE_HMR === "true" ? false : { server: httpServer },
+        },
+        appType: "spa",
+      });
+      viteMiddleware = vite.middlewares;
+    })();
+
+    viteReady.catch((err) => {
+      console.error("Failed to initialize Vite dev middleware:", err);
+      process.exit(1);
     });
-    app.use(vite.middlewares);
+
+    app.use(async (req, res, next) => {
+      try {
+        await viteReady;
+        if (viteMiddleware) {
+          viteMiddleware(req, res, next);
+          return;
+        }
+        next();
+      } catch (err) {
+        next(err);
+      }
+    });
   } else {
     const distDir = path.resolve(__dirname, "dist");
     if (fs.existsSync(distDir)) {
@@ -215,7 +260,7 @@ async function startServer() {
     }
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Emdash server listening on http://localhost:${PORT}`);
   });
 }

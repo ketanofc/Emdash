@@ -8,11 +8,12 @@ import type { UserSession } from "@/src/types";
 import { cn } from "@/src/lib/utils";
 
 interface NavbarProps {
-  mode: "home" | "workspace" | "admin" | "signin" | "signup";
+  mode: "home" | "workspace" | "admin" | "signin" | "signup" | "web" | "sponsorship";
   isDark: boolean;
   onToggleTheme: (e?: React.MouseEvent<HTMLButtonElement>) => void;
   onGoHome: () => void;
   onOpenTemplates: () => void;
+  onOpenWebAgent: () => void;
   onOpenSponsor?: () => void;
   onOpenWallet?: () => void;
   onOpenAdmin?: () => void;
@@ -27,6 +28,7 @@ export function Navbar({
   onToggleTheme,
   onGoHome,
   onOpenTemplates,
+  onOpenWebAgent,
   onOpenSponsor,
   onOpenAdmin,
   onOpenAuth,
@@ -44,7 +46,7 @@ export function Navbar({
   }, [mobileMenuOpen]);
 
   const railWidthClass =
-    mode === "home" || mode === "signin" || mode === "signup"
+    mode === "home" || mode === "signin" || mode === "signup" || mode === "sponsorship"
       ? "md:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl"
       : "max-w-full";
 
@@ -103,11 +105,24 @@ export function Navbar({
           >
             Templates
           </button>
+          <button
+            type="button"
+            onClick={onOpenWebAgent}
+            className={cn(
+              "text-sm lg:text-[15px] tracking-tight font-sans transition-colors hover:text-primary whitespace-nowrap shrink-0 cursor-pointer",
+              mode === "web" ? "text-primary font-medium" : "text-foreground"
+            )}
+          >
+            Web Agent
+          </button>
           {onOpenSponsor && (
             <button
               type="button"
               onClick={onOpenSponsor}
-              className="text-sm lg:text-[15px] tracking-tight font-sans text-foreground transition-colors hover:text-primary whitespace-nowrap shrink-0 cursor-pointer"
+              className={cn(
+                "text-sm lg:text-[15px] tracking-tight font-sans transition-colors hover:text-primary whitespace-nowrap shrink-0 cursor-pointer",
+                mode === "sponsorship" ? "text-primary font-medium" : "text-foreground"
+              )}
             >
               Sponsorship
             </button>
@@ -268,14 +283,40 @@ export function Navbar({
                   <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                 </span>
               </button>
+              <button
+                type="button"
+                onClick={() => handleNavAction(onOpenWebAgent)}
+                className={cn(
+                  "group flex items-center justify-between px-4 py-3 text-left text-sm font-sans transition-colors hover:bg-muted/60 cursor-pointer touch-manipulation",
+                  mode === "web" ? "text-primary font-medium" : "text-foreground"
+                )}
+              >
+                <span>Web Agent</span>
+                <span
+                  className={cn(
+                    "size-6 border border-edge bg-background grid place-items-center transition-colors group-hover:border-primary group-hover:text-primary",
+                    mode === "web" ? "border-primary/50 text-primary" : "text-muted-foreground"
+                  )}
+                >
+                  <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                </span>
+              </button>
               {onOpenSponsor && (
                 <button
                   type="button"
                   onClick={() => handleNavAction(onOpenSponsor)}
-                  className="group flex items-center justify-between px-4 py-3 text-left text-sm font-sans text-foreground transition-colors hover:bg-muted/60 hover:text-primary cursor-pointer touch-manipulation"
+                  className={cn(
+                    "group flex items-center justify-between px-4 py-3 text-left text-sm font-sans transition-colors hover:bg-muted/60 cursor-pointer touch-manipulation",
+                    mode === "sponsorship" ? "text-primary font-medium" : "text-foreground"
+                  )}
                 >
                   <span>Sponsorship</span>
-                  <span className="size-6 border border-edge bg-background grid place-items-center text-muted-foreground transition-colors group-hover:border-primary group-hover:text-primary">
+                  <span
+                    className={cn(
+                      "size-6 border border-edge bg-background grid place-items-center transition-colors group-hover:border-primary group-hover:text-primary",
+                      mode === "sponsorship" ? "border-primary/50 text-primary" : "text-muted-foreground"
+                    )}
+                  >
                     <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                   </span>
                 </button>

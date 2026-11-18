@@ -3,6 +3,7 @@ import { ArrowUp, File as FileIcon, Paperclip, X } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Textarea } from "@/src/components/ui/textarea";
 import { CornerBrackets } from "@/src/components/CornerBrackets";
+import { WebAgentLandingSection } from "@/src/components/WebAgentLandingSection";
 import {
   ROTATING_PLACEHOLDERS,
   TEMPLATES,
@@ -24,6 +25,7 @@ interface HomeViewProps {
   isPro: boolean;
   onOpenSponsor: () => void;
   onOpenWallet: () => void;
+  onOpenWebAgent: () => void;
 }
 
 const TEMPLATE_TAGS: Record<string, string> = {
@@ -41,6 +43,7 @@ export function HomeView({
   isPro,
   onOpenSponsor,
   onOpenWallet,
+  onOpenWebAgent,
 }: HomeViewProps) {
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [attachments, setAttachments] = useState<AttachedFile[]>([]);
@@ -293,7 +296,7 @@ export function HomeView({
                 aria-label="Build"
                 className="h-9 px-5 font-mono uppercase text-xs gap-2"
               >
-                <span>Build app</span>
+                <span>Build</span>
                 <ArrowUp className="size-3.5" />
               </Button>
             </div>
@@ -351,23 +354,17 @@ export function HomeView({
                 Pick one and make it yours. Free to start · Supported by ads.
               </p>
             </div>
-            <span className="font-mono uppercase text-xs text-muted-foreground">
-              01 — 06
-            </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-edge border border-edge">
-            {TEMPLATES.map((tpl, idx) => (
+            {TEMPLATES.map((tpl) => (
               <button
                 key={tpl.id}
                 type="button"
                 onClick={() => handleSelectTemplate(tpl)}
                 className="group bg-card hover:bg-muted/60 p-5 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring flex flex-col cursor-pointer"
               >
-                <div className="flex items-center justify-between w-full mb-3.5">
-                  <span className="font-mono uppercase text-xs text-muted-foreground tabular-nums">
-                    {String(idx + 1).padStart(2, "0")}
-                  </span>
+                <div className="flex items-center justify-end w-full mb-3.5">
                   <span className="font-mono uppercase text-[11px] text-primary">
                     {TEMPLATE_TAGS[tpl.id] ?? "Template"}
                   </span>
@@ -462,6 +459,8 @@ export function HomeView({
       <div className="w-full px-2">
         <div className="relative flex h-8 md:h-10 w-full min-w-0 md:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto border-x border-edge bg-card hatch-pattern" />
       </div>
+
+      <WebAgentLandingSection onOpenWebAgent={onOpenWebAgent} />
     </main>
   );
 }

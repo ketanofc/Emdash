@@ -13,6 +13,7 @@ export type DocSection =
 interface FooterProps {
   onGoHome: () => void;
   onOpenTemplates?: () => void;
+  onOpenWebAgent: () => void;
   onOpenDocs: (section?: DocSection) => void;
   onOpenSponsor: () => void;
 }
@@ -77,6 +78,7 @@ const SOCIAL_LINKS: ReadonlyArray<{
 
 export function Footer({
   onGoHome,
+  onOpenWebAgent,
   onOpenDocs,
   onOpenSponsor,
 }: FooterProps) {
@@ -121,6 +123,13 @@ export function Footer({
                 className="text-xs font-medium text-foreground hover:text-primary transition-colors whitespace-nowrap shrink-0 cursor-pointer py-1"
               >
                 Builder
+              </button>
+              <button
+                type="button"
+                onClick={onOpenWebAgent}
+                className="text-xs font-medium text-foreground hover:text-primary transition-colors whitespace-nowrap shrink-0 cursor-pointer py-1"
+              >
+                Web Agent
               </button>
               <button
                 type="button"
