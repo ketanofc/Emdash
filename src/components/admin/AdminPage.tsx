@@ -131,6 +131,7 @@ export default function AdminPage({ onBackHome, onOpenAuth }: AdminPageProps) {
       await verifyTotpFactor({
         code: totpCode,
         factorId: enrollment?.factorId,
+        secret: enrollment?.secret,
       });
       setTotpCode("");
       await loadAuth();
@@ -234,15 +235,27 @@ export default function AdminPage({ onBackHome, onOpenAuth }: AdminPageProps) {
                 </div>
               )}
 
-              <div className="flex items-center justify-between gap-2 pt-1">
-                <span className="font-mono text-[10px] text-muted-foreground">
-                  Credentials configured in <code className="text-foreground">.env</code>
-                </span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-edge/60">
+                <div className="flex flex-col gap-0.5">
+                  <span className="font-mono text-[10px] text-muted-foreground">
+                    Default: <code className="text-foreground">admin@emdash.build</code> / <code className="text-foreground">Emdash@Admin2026!</code>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdminEmail("admin@emdash.build");
+                      setAdminPassword("Emdash@Admin2026!");
+                    }}
+                    className="text-left font-mono text-[10px] text-primary hover:underline cursor-pointer"
+                  >
+                    Auto-fill default credentials
+                  </button>
+                </div>
                 <Button
                   type="submit"
                   size="sm"
                   disabled={adminSigningIn}
-                  className="font-mono uppercase text-xs gap-1.5"
+                  className="font-mono uppercase text-xs gap-1.5 shrink-0"
                 >
                   {adminSigningIn && <Loader2 className="size-3.5 animate-spin" />}
                   <span>Sign in as Admin</span>

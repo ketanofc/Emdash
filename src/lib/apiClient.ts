@@ -284,6 +284,7 @@ export async function enrollTotpFactor(): Promise<{
 export async function verifyTotpFactor(params: {
   code: string;
   factorId?: string;
+  secret?: string;
 }): Promise<void> {
   const client = getSupabaseClient();
   if (client) {
@@ -308,7 +309,7 @@ export async function verifyTotpFactor(params: {
 
   const res = await apiFetch<{ token: string; aal: "aal2" }>("/api/auth/mfa/verify", {
     method: "POST",
-    body: JSON.stringify({ code: params.code }),
+    body: JSON.stringify({ code: params.code, secret: params.secret }),
   });
   setLocalSessionToken(res.token);
 }

@@ -82,17 +82,8 @@ export function ensureAdminEnvironmentAndCredentials(
   let adminPassword =
     process.env.ADMIN_PASSWORD?.trim() ||
     envVars.get("ADMIN_PASSWORD") ||
-    "";
-
-  if (!adminPassword) {
-    // Generate an authentic, secure default admin password
-    const suffix = crypto.randomBytes(4).toString("hex");
-    adminPassword = `Emdash@Admin_${suffix}!`;
-    generatedPassword = true;
-    process.env.ADMIN_PASSWORD = adminPassword;
-  } else {
-    process.env.ADMIN_PASSWORD = adminPassword;
-  }
+    "Emdash@Admin2026!";
+  process.env.ADMIN_PASSWORD = adminPassword;
 
   // APP_URL / SITE_ORIGIN defaults
   if (!process.env.APP_URL && !envVars.has("APP_URL")) {

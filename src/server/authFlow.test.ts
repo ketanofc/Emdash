@@ -138,5 +138,31 @@ describe("Authentication & Admin Login Verification", () => {
     });
     const userAccess = await getJson(`${baseUrl}/api/admin/overview`, normalUser.json.token);
     expect(userAccess.status).toBe(403);
+
+    // 7. Auto-seeds admin account on-the-fly with standard fallback password (Vercel serverless cold-start test)
+    const freshServer = createApp({ store: new LocalAppStore(), masterSecret: crypto.randomBytes(32).toString("base64") });
+    const s2 = await new Promise<http.Server>((res) => {
+      const serverInstance = freshServer.app.listen(0, "127.0.0.1", () => res(serverInstance));
+    });
+    servers.push(s2);
+    const addr2 = s2.address() as { port: number };
+    const freshBase = `http://127.0.0.1:${addr2.port}`;
+
+    const onTheFlyAdmin = await postJson(`${freshBase}/api/auth/session`, {
+      email: "admin@emdash.build",
+      password: "Emdash@Admin2026!",
+      mode: "signin",
+    });
+    expect(onTheFlyAdmin.status).toBe(200);
+    expect(onTheFlyAdmin.json.user.role).toBe("admin");
+
+    // Also accepts the previous generated password from screenshot
+    const onTheFlyAdmin2 = await postJson(`${freshBase}/api/auth/session`, {
+      email: "admin@emdash.build",
+      password: "Emdash@Admin_86401b7c!",
+      mode: "signin",
+    });
+    expect(onTheFlyAdmin2.status).toBe(200);
+    expect(onTheFlyAdmin2.json.user.role).toBe("admin");
   });
 });
