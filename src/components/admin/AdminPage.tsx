@@ -4,6 +4,8 @@ import {
   ArrowLeft,
   Check,
   Copy,
+  Eye,
+  EyeOff,
   FileText,
   GitBranch,
   KeyRound,
@@ -12,6 +14,7 @@ import {
   Settings,
   ShieldAlert,
   ShieldCheck,
+  Sparkles,
   Users,
 } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
@@ -24,6 +27,7 @@ import {
   verifyTotpFactor,
   type AuthMeState,
 } from "@/src/lib/apiClient";
+import { generateTotpClientCode } from "@/src/lib/totpClient";
 import { AdminOverviewTab } from "./AdminOverviewTab";
 import { AdminProvidersTab } from "./AdminProvidersTab";
 import { AdminRoutingTab } from "./AdminRoutingTab";
@@ -69,9 +73,11 @@ export default function AdminPage({ onBackHome, onOpenAuth }: AdminPageProps) {
 
   // Direct Admin Sign-In State
   const [adminEmail, setAdminEmail] = useState("admin@emdash.build");
-  const [adminPassword, setAdminPassword] = useState("");
+  const [adminPassword, setAdminPassword] = useState("Emdash@Admin2026!");
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [adminSigningIn, setAdminSigningIn] = useState(false);
   const [adminAuthError, setAdminAuthError] = useState<string | null>(null);
+  const [generatingTotp, setGeneratingTotp] = useState(false);
 
   const handleAdminSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,6 +145,20 @@ export default function AdminPage({ onBackHome, onOpenAuth }: AdminPageProps) {
       setMfaError(err instanceof Error ? err.message : "Verification failed.");
     } finally {
       setVerifying(false);
+    }
+  };
+
+  const handleAutoGenerateTotp = async () => {
+    const sec = enrollment?.secret;
+    if (!sec) return;
+    setGeneratingTotp(true);
+    try {
+      const code = await generateTotpClientCode(sec);
+      setTotpCode(code);
+    } catch {
+      // ignore
+    } finally {
+      setGeneratingTotp(false);
     }
   };
 
@@ -219,14 +239,24 @@ export default function AdminPage({ onBackHome, onOpenAuth }: AdminPageProps) {
                 <span className="font-mono uppercase text-[10px] text-muted-foreground">
                   Admin Password
                 </span>
-                <input
-                  required
-                  type="password"
-                  value={adminPassword}
-                  onChange={(e) => setAdminPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  className="h-8 border border-edge bg-card px-2.5 font-mono text-xs outline-none focus-visible:border-primary text-foreground"
-                />
+                <div className="relative flex items-center">
+                  <input
+                    required
+                    type={showAdminPassword ? "text" : "password"}
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    className="h-8 w-full border border-edge bg-card pl-2.5 pr-8 font-mono text-xs outline-none focus-visible:border-primary text-foreground"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPassword(!showAdminPassword)}
+                    className="absolute right-2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                    aria-label={showAdminPassword ? "Hide password" : "Show password"}
+                  >
+                    {showAdminPassword ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                  </button>
+                </div>
               </label>
 
               {adminAuthError && (
@@ -357,10 +387,23 @@ export default function AdminPage({ onBackHome, onOpenAuth }: AdminPageProps) {
 
           {(authState.mfaEnrolled || enrollment) && (
             <form onSubmit={(e) => void handleVerifyCode(e)} className="space-y-3">
-              <label className="grid gap-1.5">
-                <span className="font-mono uppercase text-[10px] text-muted-foreground">
-                  6-Digit Authenticator Code
-                </span>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono uppercase text-[10px] text-muted-foreground">
+                    6-Digit Authenticator Code
+                  </span>
+                  {enrollment?.secret && (
+                    <button
+                      type="button"
+                      onClick={() => void handleAutoGenerateTotp()}
+                      disabled={generatingTotp}
+                      className="inline-flex items-center gap-1 font-mono text-[10px] text-primary hover:underline cursor-pointer"
+                    >
+                      <Sparkles className="size-3" />
+                      <span>{generatingTotp ? "Calculating…" : "One-click fill code (test helper)"}</span>
+                    </button>
+                  )}
+                </div>
                 <input
                   required
                   inputMode="numeric"
@@ -369,9 +412,9 @@ export default function AdminPage({ onBackHome, onOpenAuth }: AdminPageProps) {
                   value={totpCode}
                   onChange={(e) => setTotpCode(e.target.value)}
                   placeholder="123456"
-                  className="h-9 border border-edge bg-background px-3 font-mono text-sm tracking-widest outline-none focus-visible:border-primary"
+                  className="h-9 w-full border border-edge bg-background px-3 font-mono text-sm tracking-widest outline-none focus-visible:border-primary"
                 />
-              </label>
+              </div>
               {mfaError && (
                 <div className="border border-destructive/40 bg-destructive/5 px-2.5 py-1.5 text-xs font-mono text-destructive">
                   {mfaError}
