@@ -107,7 +107,9 @@ type AppMode =
   | "sponsorship"
   | "info";
 
-function getRouteFromPath(pathname: string): { mode: AppMode; infoPage?: DocSection } {
+function getRouteFromPath(
+  pathname: string
+): { mode: AppMode; infoPage?: DocSection } {
   const normalized = pathname.toLowerCase().replace(/\/+$/, "") || "/";
   if (normalized.startsWith("/admin")) return { mode: "admin" };
   if (normalized.startsWith("/web")) return { mode: "web" };
@@ -179,7 +181,10 @@ export default function App() {
   });
   const [infoPage, setInfoPage] = useState<DocSection>(() => {
     if (typeof window !== "undefined") {
-      return getRouteFromPath(window.location.pathname).infoPage ?? "docs";
+      return (
+        getRouteFromPath(window.location.pathname).infoPage ??
+        "docs"
+      );
     }
     return "docs";
   });
