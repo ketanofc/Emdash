@@ -4,6 +4,7 @@ import { Button } from "@/src/components/ui/button";
 import { Textarea } from "@/src/components/ui/textarea";
 import { CornerBrackets } from "@/src/components/CornerBrackets";
 import { WebAgentLandingSection } from "@/src/components/WebAgentLandingSection";
+import { FounderNoteSection } from "@/src/components/FounderNoteSection";
 import {
   ROTATING_PLACEHOLDERS,
   TEMPLATES,
@@ -461,6 +462,8 @@ export function HomeView({
       </div>
 
       <WebAgentLandingSection onOpenWebAgent={onOpenWebAgent} />
+
+      <FounderNoteSection />
     </main>
   );
 }
