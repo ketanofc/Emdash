@@ -2,8 +2,6 @@
 
 <img src="public/assets/emdash-logo.png" alt="Emdash Logo" width="84" />
 
-# — Emdash
-
 **Say it. Ship it.**
 
 A free, open-source, sponsor-supported AI web app builder and browser-based Web Agent IDE. Describe what you want in plain language, preview multi-file React or standalone HTML apps live in Sandpack, iterate through chat, export clean source code as `.zip`, or connect your own API keys in the Web Agent.
