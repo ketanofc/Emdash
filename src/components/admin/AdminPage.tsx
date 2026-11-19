@@ -19,6 +19,8 @@ import { CornerBrackets } from "@/src/components/CornerBrackets";
 import {
   enrollTotpFactor,
   fetchAuthState,
+  signInAccount,
+  signOutAccount,
   verifyTotpFactor,
   type AuthMeState,
 } from "@/src/lib/apiClient";
@@ -64,6 +66,35 @@ export default function AdminPage({ onBackHome, onOpenAuth }: AdminPageProps) {
   const [mfaError, setMfaError] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
+
+  // Direct Admin Sign-In State
+  const [adminEmail, setAdminEmail] = useState("admin@emdash.build");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminSigningIn, setAdminSigningIn] = useState(false);
+  const [adminAuthError, setAdminAuthError] = useState<string | null>(null);
+
+  const handleAdminSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminSigningIn(true);
+    setAdminAuthError(null);
+    try {
+      await signInAccount({
+        email: adminEmail.trim(),
+        password: adminPassword,
+        mode: "signin",
+      });
+      await loadAuth();
+    } catch (err) {
+      setAdminAuthError(err instanceof Error ? err.message : "Admin sign-in failed. Check your password in .env.");
+    } finally {
+      setAdminSigningIn(false);
+    }
+  };
+
+  const handleAdminSignOut = async () => {
+    await signOutAccount();
+    await loadAuth();
+  };
 
   const loadAuth = async () => {
     setLoading(true);
@@ -132,17 +163,95 @@ export default function AdminPage({ onBackHome, onOpenAuth }: AdminPageProps) {
           <CornerBrackets />
           <div className="flex items-center gap-2 font-mono uppercase text-xs text-destructive">
             <ShieldAlert className="size-4" />
-            <span>Admin access required</span>
+            <span>Admin Control Plane</span>
           </div>
           <h1 className="text-xl font-semibold tracking-tight">
-            Restricted Control Plane
+            Administrator Authentication
           </h1>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            This route requires an authenticated account with database role{" "}
-            <code className="font-mono text-foreground">admin</code> and TOTP two-factor
-            authentication enabled.
+            This route requires an authenticated account with role{" "}
+            <code className="font-mono text-foreground font-semibold">admin</code> and TOTP two-factor
+            verification (aal2).
           </p>
-          <div className="flex flex-wrap items-center gap-2 pt-1">
+
+          {/* If already signed in as a non-admin user */}
+          {authState?.user && !isAdmin && (
+            <div className="border border-destructive/30 bg-destructive/5 p-3 text-xs space-y-2">
+              <div className="font-mono text-destructive font-semibold">
+                Access Denied · Role: {authState.user.role}
+              </div>
+              <p className="text-muted-foreground">
+                Currently signed in as <span className="font-semibold text-foreground">{authState.user.email}</span>. This account does not have administrator privileges.
+              </p>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={() => void handleAdminSignOut()}
+                className="font-mono uppercase text-xs mt-1"
+              >
+                Sign out to switch to admin
+              </Button>
+            </div>
+          )}
+
+          {/* If not signed in at all, render direct Admin Sign-in Form */}
+          {!authState?.user && (
+            <form onSubmit={(e) => void handleAdminSignIn(e)} className="border border-edge bg-background p-4 space-y-3">
+              <div className="font-mono uppercase text-[10px] text-primary font-semibold">
+                Sign in with Admin Credentials
+              </div>
+              <label className="grid gap-1">
+                <span className="font-mono uppercase text-[10px] text-muted-foreground">
+                  Admin Email
+                </span>
+                <input
+                  required
+                  type="email"
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  placeholder="admin@emdash.build"
+                  className="h-8 border border-edge bg-card px-2.5 font-mono text-xs outline-none focus-visible:border-primary text-foreground"
+                />
+              </label>
+              <label className="grid gap-1">
+                <span className="font-mono uppercase text-[10px] text-muted-foreground">
+                  Admin Password
+                </span>
+                <input
+                  required
+                  type="password"
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  placeholder="••••••••••••"
+                  className="h-8 border border-edge bg-card px-2.5 font-mono text-xs outline-none focus-visible:border-primary text-foreground"
+                />
+              </label>
+
+              {adminAuthError && (
+                <div className="border border-destructive/40 bg-destructive/10 px-2.5 py-1.5 font-mono text-xs text-destructive">
+                  {adminAuthError}
+                </div>
+              )}
+
+              <div className="flex items-center justify-between gap-2 pt-1">
+                <span className="font-mono text-[10px] text-muted-foreground">
+                  Credentials configured in <code className="text-foreground">.env</code>
+                </span>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={adminSigningIn}
+                  className="font-mono uppercase text-xs gap-1.5"
+                >
+                  {adminSigningIn && <Loader2 className="size-3.5 animate-spin" />}
+                  <span>Sign in as Admin</span>
+                </Button>
+              </div>
+            </form>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-edge/60">
             <Button
               type="button"
               variant="outline"
@@ -156,11 +265,12 @@ export default function AdminPage({ onBackHome, onOpenAuth }: AdminPageProps) {
             {!authState?.user && (
               <Button
                 type="button"
+                variant="ghost"
                 size="sm"
                 onClick={onOpenAuth}
-                className="font-mono uppercase text-xs"
+                className="font-mono uppercase text-xs text-muted-foreground hover:text-foreground"
               >
-                Sign in
+                Go to standard sign in
               </Button>
             )}
           </div>

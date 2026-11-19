@@ -688,7 +688,11 @@ export default function App() {
             onChangeMode={(next) => navigateToMode(next)}
             onSuccess={(session) => {
               handleSignIn(session);
-              navigateToMode("home");
+              if (session.role === "admin") {
+                navigateToMode("admin");
+              } else {
+                navigateToMode("home");
+              }
             }}
             onOpenDocs={(section) => openInfoPage(section)}
             onOpenWallet={() => setWalletOpen(true)}

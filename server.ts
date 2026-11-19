@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { createAdminRouter, createAuthRouter, type ServerContext } from "./src/server/adminRouter.ts";
 import { createPublicApiRouter } from "./src/server/apiHandlers.ts";
 import { LocalAppStore, resolveServerMasterSecret } from "./src/server/store.ts";
+import { ensureAdminEnvironmentAndCredentials } from "./src/server/adminBootstrap.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -94,6 +95,18 @@ export function createApp(customCtx?: Partial<ServerContext>) {
           ? null
           : path.join(dataDir, "emdash-store.json"),
     });
+
+  // Bootstrap admin credentials & environment in non-test mode or default store
+  if (!customCtx?.store) {
+    if (process.env.NODE_ENV !== "test" && !process.env.VITEST) {
+      const creds = ensureAdminEnvironmentAndCredentials(path.resolve(__dirname));
+      if (creds.adminEmail && creds.adminPassword) {
+        store.ensureAdminAccount(creds.adminEmail, creds.adminPassword, "Administrator");
+      }
+    } else if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
+      store.ensureAdminAccount(process.env.ADMIN_EMAIL, process.env.ADMIN_PASSWORD, "Administrator");
+    }
+  }
   const masterSecret = customCtx?.masterSecret ?? resolveServerMasterSecret(dataDir);
   const signingSecret = customCtx?.signingSecret ?? resolveSigningSecret(masterSecret);
 

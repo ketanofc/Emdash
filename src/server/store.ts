@@ -375,6 +375,48 @@ export class LocalAppStore implements LlmRouterStore {
     return { created: true, profile: { ...profile } };
   }
 
+  ensureAdminAccount(email: string, password: string, name = "Admin"): ProfileRecord {
+    const emailNorm = email.trim().toLowerCase();
+    for (const p of this.profiles.values()) {
+      if (p.email.toLowerCase() === emailNorm) {
+        p.role = "admin";
+        p.status = "active";
+        p.name = p.name || name;
+        if (password) {
+          p.password_hash = hashPassword(password);
+        }
+        p.last_seen_at = new Date(this.nowFn()).toISOString();
+        this.persistToDisk();
+        return { ...p };
+      }
+    }
+
+    const nowIso = new Date(this.nowFn()).toISOString();
+    const userId = crypto.randomUUID();
+    const profile: ProfileRecord = {
+      user_id: userId,
+      email: emailNorm,
+      name,
+      role: "admin",
+      status: "active",
+      country: null,
+      last_seen_at: nowIso,
+      created_at: nowIso,
+      password_hash: password ? hashPassword(password) : null,
+      totp_secret: null,
+      totp_verified: false,
+    };
+    this.profiles.set(userId, profile);
+    this.wallets.set(userId, {
+      user_id: userId,
+      balance: this.config.daily_grant || 100,
+      last_grant_at: nowIso,
+      updated_at: nowIso,
+    });
+    this.persistToDisk();
+    return { ...profile };
+  }
+
   getProfile(userId: string): ProfileRecord | null {
     const p = this.profiles.get(userId);
     return p ? { ...p } : null;

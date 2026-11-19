@@ -260,18 +260,30 @@ export function createAuthRouter(ctx: ServerContext): express.Router {
           res.status(401).json({ error: "Invalid email or password." });
           return;
         }
-        if (existing.password_hash && !verifyPassword(password, existing.password_hash)) {
+        if (!existing.password_hash || !verifyPassword(password, existing.password_hash)) {
           res.status(401).json({ error: "Invalid email or password." });
+          return;
+        }
+        if (existing.status === "suspended") {
+          res.status(403).json({ error: "Your account is currently suspended." });
           return;
         }
       }
 
-      const { profile } = ctx.store.ensureProfile({
-        email,
-        name: body.name,
-        country,
-        passwordHash: password.length >= 6 ? hashPassword(password) : null,
-      });
+      let profile = existing;
+      if (!profile) {
+        const ensured = ctx.store.ensureProfile({
+          email,
+          name: body.name,
+          country,
+          passwordHash: password.length >= 6 ? hashPassword(password) : null,
+        });
+        profile = ensured.profile;
+      } else {
+        profile.last_seen_at = new Date().toISOString();
+        if (country) profile.country = country;
+      }
+
       const token = signSessionToken(
         {
           userId: profile.user_id,
