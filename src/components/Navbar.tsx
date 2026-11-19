@@ -8,7 +8,7 @@ import type { UserSession } from "@/src/types";
 import { cn } from "@/src/lib/utils";
 
 interface NavbarProps {
-  mode: "home" | "workspace" | "admin" | "signin" | "signup" | "web" | "sponsorship";
+  mode: "home" | "workspace" | "admin" | "signin" | "signup" | "web" | "sponsorship" | "info";
   isDark: boolean;
   onToggleTheme: (e?: React.MouseEvent<HTMLButtonElement>) => void;
   onGoHome: () => void;
@@ -46,7 +46,7 @@ export function Navbar({
   }, [mobileMenuOpen]);
 
   const railWidthClass =
-    mode === "home" || mode === "signin" || mode === "signup" || mode === "sponsorship"
+    mode === "home" || mode === "signin" || mode === "signup" || mode === "sponsorship" || mode === "info"
       ? "md:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl"
       : "max-w-full";
 

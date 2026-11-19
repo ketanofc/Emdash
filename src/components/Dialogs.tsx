@@ -480,7 +480,7 @@ interface SupportDocsDialogProps {
 const DOC_TABS: Array<{ id: DocSection; label: string }> = [
   { id: "quickstart", label: "Quickstart" },
   { id: "prompting", label: "Prompting & Files" },
-  { id: "quota", label: "Coins & Export" },
+  { id: "faq", label: "FAQ" },
   { id: "blog", label: "Blog" },
   { id: "privacy", label: "Privacy Policy" },
   { id: "terms", label: "Terms of Service" },
@@ -529,7 +529,7 @@ export function SupportDocsDialog({
         </div>
 
         <div className="border border-edge bg-background p-4 text-xs leading-relaxed text-muted-foreground space-y-3 max-h-[320px] overflow-y-auto">
-          {section === "quickstart" && (
+          {(section === "quickstart" || section === "docs") && (
             <>
               <div>
                 <h3 className="text-sm font-semibold text-foreground mb-1">
@@ -579,7 +579,7 @@ export function SupportDocsDialog({
             </>
           )}
 
-          {section === "quota" && (
+          {(section === "faq" || section === "support") && (
             <>
               <div>
                 <h3 className="text-sm font-semibold text-foreground mb-1">

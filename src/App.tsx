@@ -8,6 +8,8 @@ import { WorkspaceView } from "@/src/components/WorkspaceView";
 import { AuthPage } from "@/src/components/AuthPage";
 import { SponsorshipPage } from "@/src/components/SponsorshipPage";
 import { WebAgentPage } from "@/src/components/web/WebAgentPage";
+import { InfoPageView } from "@/src/components/InfoPages";
+import { INFO_PAGES } from "@/src/data/docsPages";
 import { Footer, type DocSection } from "@/src/components/Footer";
 import {
   AuthDialog,
@@ -95,13 +97,63 @@ function formatFriendlyPipelineError(err: unknown): string {
   return err instanceof Error ? err.message : "Failed to build application.";
 }
 
-function getModeFromPath(pathname: string): "home" | "admin" | "signin" | "signup" | "web" | "sponsorship" {
-  if (pathname.startsWith("/admin")) return "admin";
-  if (pathname.startsWith("/web")) return "web";
-  if (pathname.startsWith("/sponsorship") || pathname.startsWith("/sponsor") || pathname.startsWith("/advertisers")) return "sponsorship";
-  if (pathname.startsWith("/signup") || pathname.startsWith("/register")) return "signup";
-  if (pathname.startsWith("/signin") || pathname.startsWith("/login")) return "signin";
-  return "home";
+type AppMode =
+  | "home"
+  | "workspace"
+  | "admin"
+  | "signin"
+  | "signup"
+  | "web"
+  | "sponsorship"
+  | "info";
+
+function getRouteFromPath(pathname: string): { mode: AppMode; infoPage?: DocSection } {
+  const normalized = pathname.toLowerCase().replace(/\/+$/, "") || "/";
+  if (normalized.startsWith("/admin")) return { mode: "admin" };
+  if (normalized.startsWith("/web")) return { mode: "web" };
+  if (
+    normalized.startsWith("/sponsorship") ||
+    normalized.startsWith("/sponsor") ||
+    normalized.startsWith("/advertisers")
+  ) {
+    return { mode: "sponsorship" };
+  }
+  if (normalized.startsWith("/signup") || normalized.startsWith("/register")) {
+    return { mode: "signup" };
+  }
+  if (normalized.startsWith("/signin") || normalized.startsWith("/login")) {
+    return { mode: "signin" };
+  }
+
+  if (normalized === "/docs") return { mode: "info", infoPage: "docs" };
+  if (normalized === "/quickstart" || normalized === "/docs/quickstart") {
+    return { mode: "info", infoPage: "quickstart" };
+  }
+  if (normalized === "/prompting" || normalized === "/docs/prompting") {
+    return { mode: "info", infoPage: "prompting" };
+  }
+  if (
+    normalized === "/faq" ||
+    normalized === "/docs/faq" ||
+    normalized === "/docs/quota"
+  ) {
+    return { mode: "info", infoPage: "faq" };
+  }
+  if (
+    normalized === "/support" ||
+    normalized === "/contact" ||
+    normalized === "/email-support"
+  ) {
+    return { mode: "info", infoPage: "support" };
+  }
+  if (normalized === "/legal") return { mode: "info", infoPage: "legal" };
+  if (normalized === "/privacy") return { mode: "info", infoPage: "privacy" };
+  if (normalized === "/terms") return { mode: "info", infoPage: "terms" };
+  if (normalized === "/security") return { mode: "info", infoPage: "security" };
+  if (normalized === "/trust") return { mode: "info", infoPage: "trust" };
+  if (normalized === "/blog") return { mode: "info", infoPage: "blog" };
+
+  return { mode: "home" };
 }
 
 export default function App() {
@@ -119,11 +171,17 @@ export default function App() {
   const [user, setUser] = useState<UserSession | null>(null);
   const [wallet, setWallet] = useState<WalletSummary>(DEFAULT_WALLET);
 
-  const [mode, setMode] = useState<"home" | "workspace" | "admin" | "signin" | "signup" | "web" | "sponsorship">(() => {
+  const [mode, setMode] = useState<AppMode>(() => {
     if (typeof window !== "undefined") {
-      return getModeFromPath(window.location.pathname);
+      return getRouteFromPath(window.location.pathname).mode;
     }
     return "home";
+  });
+  const [infoPage, setInfoPage] = useState<DocSection>(() => {
+    if (typeof window !== "undefined") {
+      return getRouteFromPath(window.location.pathname).infoPage ?? "docs";
+    }
+    return "docs";
   });
   const [homePrompt, setHomePrompt] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -188,35 +246,49 @@ export default function App() {
 
   useEffect(() => {
     const onPopState = () => {
-      setMode(getModeFromPath(window.location.pathname));
+      const parsed = getRouteFromPath(window.location.pathname);
+      setMode(parsed.mode);
+      if (parsed.infoPage) {
+        setInfoPage(parsed.infoPage);
+      }
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  const navigateToMode = useCallback(
-    (nextMode: "home" | "workspace" | "admin" | "signin" | "signup" | "web" | "sponsorship") => {
-      setMode(nextMode);
-      if (typeof window !== "undefined") {
-        const targetPath =
-          nextMode === "admin"
-            ? "/admin"
-            : nextMode === "web"
-              ? "/web"
-              : nextMode === "sponsorship"
-                ? "/sponsorship"
-                : nextMode === "signin"
-                  ? "/signin"
-                  : nextMode === "signup"
-                    ? "/signup"
-                    : "/";
-        if (window.location.pathname !== targetPath) {
-          window.history.pushState({}, "", targetPath);
-        }
+  const navigateToMode = useCallback((nextMode: AppMode) => {
+    setMode(nextMode);
+    if (typeof window !== "undefined" && nextMode !== "info") {
+      const targetPath =
+        nextMode === "admin"
+          ? "/admin"
+          : nextMode === "web"
+            ? "/web"
+            : nextMode === "sponsorship"
+              ? "/sponsorship"
+              : nextMode === "signin"
+                ? "/signin"
+                : nextMode === "signup"
+                  ? "/signup"
+                  : "/";
+      if (window.location.pathname !== targetPath) {
+        window.history.pushState({}, "", targetPath);
       }
-    },
-    []
-  );
+    }
+  }, []);
+
+  const openInfoPage = useCallback((page: DocSection = "docs") => {
+    if (isGenerating) return;
+    setInfoPage(page);
+    setMode("info");
+    if (typeof window !== "undefined") {
+      const targetPath = INFO_PAGES[page].path;
+      if (window.location.pathname !== targetPath) {
+        window.history.pushState({}, "", targetPath);
+      }
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [isGenerating]);
 
   const handlePause = useCallback(() => {
     abortControllerRef.current?.abort();
@@ -618,20 +690,14 @@ export default function App() {
               handleSignIn(session);
               navigateToMode("home");
             }}
-            onOpenDocs={(section) => {
-              setDocsSection(section);
-              setDocsOpen(true);
-            }}
+            onOpenDocs={(section) => openInfoPage(section)}
             onOpenWallet={() => setWalletOpen(true)}
           />
           <Footer
             onGoHome={handleGoHome}
             onOpenTemplates={handleOpenTemplates}
             onOpenWebAgent={() => navigateToMode("web")}
-            onOpenDocs={(section = "quickstart") => {
-              setDocsSection(section);
-              setDocsOpen(true);
-            }}
+            onOpenDocs={(section = "docs") => openInfoPage(section)}
             onOpenSponsor={handleOpenSponsorship}
           />
         </>
@@ -664,10 +730,29 @@ export default function App() {
             onGoHome={handleGoHome}
             onOpenTemplates={handleOpenTemplates}
             onOpenWebAgent={() => navigateToMode("web")}
-            onOpenDocs={(section = "quickstart") => {
-              setDocsSection(section);
-              setDocsOpen(true);
+            onOpenDocs={(section = "docs") => openInfoPage(section)}
+            onOpenSponsor={handleOpenSponsorship}
+          />
+        </>
+      ) : mode === "info" ? (
+        <>
+          <InfoPageView
+            page={infoPage}
+            onSelectPage={(nextPage) => openInfoPage(nextPage)}
+            onGoHome={handleGoHome}
+            onTryPrompt={(starterPrompt) => {
+              setHomePrompt(starterPrompt);
+              navigateToMode("home");
+              window.scrollTo({ top: 0, behavior: "smooth" });
             }}
+            onOpenWebAgent={() => navigateToMode("web")}
+            onOpenSponsor={handleOpenSponsorship}
+          />
+          <Footer
+            onGoHome={handleGoHome}
+            onOpenTemplates={handleOpenTemplates}
+            onOpenWebAgent={() => navigateToMode("web")}
+            onOpenDocs={(section = "docs") => openInfoPage(section)}
             onOpenSponsor={handleOpenSponsorship}
           />
         </>
@@ -686,10 +771,7 @@ export default function App() {
             onGoHome={handleGoHome}
             onOpenTemplates={handleOpenTemplates}
             onOpenWebAgent={() => navigateToMode("web")}
-            onOpenDocs={(section = "quickstart") => {
-              setDocsSection(section);
-              setDocsOpen(true);
-            }}
+            onOpenDocs={(section = "docs") => openInfoPage(section)}
             onOpenSponsor={handleOpenSponsorship}
           />
         </>

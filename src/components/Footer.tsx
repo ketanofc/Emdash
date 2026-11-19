@@ -1,14 +1,18 @@
-import { ArrowUpRight, LifeBuoy } from "lucide-react";
+import { LifeBuoy } from "lucide-react";
 import { CornerBrackets } from "@/src/components/CornerBrackets";
 
 export type DocSection =
+  | "docs"
   | "quickstart"
   | "prompting"
-  | "quota"
-  | "blog"
+  | "faq"
+  | "support"
+  | "legal"
   | "privacy"
   | "terms"
-  | "security";
+  | "security"
+  | "trust"
+  | "blog";
 
 interface FooterProps {
   onGoHome: () => void;
@@ -150,8 +154,14 @@ export function Footer({
 
           {/* Support Documentation Column */}
           <div className="col-span-1 min-w-0">
-            <h2 className="text-xs font-semibold text-foreground tracking-tight mb-3">
-              Support documentation
+            <h2 className="mb-3">
+              <button
+                type="button"
+                onClick={() => onOpenDocs("docs")}
+                className="text-xs font-semibold text-foreground hover:text-primary tracking-tight transition-colors cursor-pointer text-left"
+              >
+                Support documentation
+              </button>
             </h2>
             <ul className="space-y-1.5">
               <li>
@@ -175,28 +185,35 @@ export function Footer({
               <li>
                 <button
                   type="button"
-                  onClick={() => onOpenDocs("quota")}
+                  onClick={() => onOpenDocs("faq")}
                   className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors py-1 cursor-pointer text-left"
                 >
-                  <span>Daily quota &amp; export FAQ</span>
+                  <span>FAQ</span>
                 </button>
               </li>
               <li>
-                <a
-                  href="mailto:support@emdash.build"
-                  className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors py-1"
+                <button
+                  type="button"
+                  onClick={() => onOpenDocs("support")}
+                  className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors py-1 cursor-pointer text-left"
                 >
                   <LifeBuoy className="size-3 shrink-0" aria-hidden="true" />
                   <span>Email support</span>
-                </a>
+                </button>
               </li>
             </ul>
           </div>
 
           {/* Legal Column */}
           <div className="col-span-1 min-w-0">
-            <h2 className="text-xs font-semibold text-foreground tracking-tight mb-3">
-              Legal
+            <h2 className="mb-3">
+              <button
+                type="button"
+                onClick={() => onOpenDocs("legal")}
+                className="text-xs font-semibold text-foreground hover:text-primary tracking-tight transition-colors cursor-pointer text-left"
+              >
+                Legal
+              </button>
             </h2>
             <ul className="space-y-1.5">
               <li>
@@ -227,20 +244,13 @@ export function Footer({
                 </button>
               </li>
               <li>
-                <a
-                  href="/trust.html"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Trust Center (opens in a new tab)"
-                  title="Trust Center (opens in a new tab)"
-                  className="group inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors py-1 whitespace-nowrap"
+                <button
+                  type="button"
+                  onClick={() => onOpenDocs("trust")}
+                  className="inline-flex items-center text-xs text-muted-foreground hover:text-primary transition-colors py-1 cursor-pointer text-left whitespace-nowrap"
                 >
-                  <span>Trust Center</span>
-                  <ArrowUpRight
-                    className="size-3 opacity-60 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:opacity-100 shrink-0"
-                    aria-hidden="true"
-                  />
-                </a>
+                  Trust Center
+                </button>
               </li>
             </ul>
           </div>
