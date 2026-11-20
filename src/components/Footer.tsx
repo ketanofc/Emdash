@@ -122,11 +122,11 @@ export function Footer({
 
 
             </div>
-            <p className="mt-1 text-xs sm:text-[13px] leading-relaxed text-muted-foreground max-w-sm">
+            <p className="mt-1 mb-1 text-xs sm:text-[13px] leading-relaxed text-muted-foreground max-w-sm">
               Build web apps, landing pages, and interactive tools from a single prompt. Free to start · Supported by ads.
             </p>
 
-            <nav aria-label="Footer product navigation" className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <nav aria-label="Footer product navigation" className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-1">
               <button
                 type="button"
                 onClick={() => {
