@@ -8,10 +8,9 @@ import {
   type TocItem,
 } from "@/src/components/docs/DocsLayout";
 import { FAQ_LIST, INFO_PAGES } from "@/src/data/docsPages";
-import { cn } from "@/src/lib/utils";
 
 const TOC: TocItem[] = [
-  { id: "search-faq", label: "Filter Questions" },
+  { id: "search-faq", label: "Search Questions" },
   { id: "dash-coins-faq", label: "Core Platform Q&A" },
   { id: "exports-hosting-faq", label: "Exports & Hosting Guide" },
   { id: "privacy-ads-faq", label: "Sponsors, Ads & Privacy" },
@@ -59,26 +58,19 @@ export function FaqPage(props: DocsPageProps) {
 
   const allFaqs = useMemo(() => [...FAQ_LIST, ...EXTRA_FAQ], []);
 
-  const [faqCategory, setFaqCategory] = useState<string>("All");
   const [searchQuery, setSearchQuery] = useState<string>("");
-
-  const faqCategories = useMemo(
-    () => ["All", ...Array.from(new Set(allFaqs.map((item) => item.category)))],
-    [allFaqs]
-  );
 
   const filteredFaqs = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return allFaqs.filter((item) => {
-      const catMatch = faqCategory === "All" || item.category === faqCategory;
-      const textMatch =
+      return (
         !q ||
         item.question.toLowerCase().includes(q) ||
         item.answer.toLowerCase().includes(q) ||
-        item.category.toLowerCase().includes(q);
-      return catMatch && textMatch;
+        item.category.toLowerCase().includes(q)
+      );
     });
-  }, [allFaqs, faqCategory, searchQuery]);
+  }, [allFaqs, searchQuery]);
 
   return (
     <DocsLayout
@@ -89,40 +81,22 @@ export function FaqPage(props: DocsPageProps) {
       onOpenWebAgent={onOpenWebAgent}
     >
       <section className="space-y-4">
-        <DocHeading id="search-faq">Search &amp; filter questions</DocHeading>
+        <DocHeading id="search-faq">Search questions</DocHeading>
         <p className="text-muted-foreground">
           Detailed answers covering daily Dash Coin grants, automatic failure refunds, React &amp; static code exports, local IndexedDB versioning, reference uploads, bring-your-own-key Web Agent workflows, and sponsor transparency.
         </p>
 
-        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between pt-1">
-          <div className="relative flex-1 max-w-sm">
+        <div className="pt-1">
+          <div className="relative max-w-sm">
             <Search className="size-3.5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Filter questions (e.g. export, coins, upload)…"
-              aria-label="Filter FAQ"
+              placeholder="Search questions (e.g. export, coins, upload)…"
+              aria-label="Search FAQ"
               className="w-full h-9 pl-8 pr-3 border-b border-edge bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
             />
-          </div>
-
-          <div className="flex flex-wrap gap-3 text-xs font-mono">
-            {faqCategories.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setFaqCategory(cat)}
-                className={cn(
-                  "pb-1 border-b transition-colors cursor-pointer",
-                  faqCategory === cat
-                    ? "border-primary text-[#c23a00] dark:text-primary font-semibold"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {cat}
-              </button>
-            ))}
           </div>
         </div>
       </section>
@@ -132,7 +106,7 @@ export function FaqPage(props: DocsPageProps) {
 
         {filteredFaqs.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No matching questions found for &ldquo;{searchQuery}&rdquo;. Try clearing your filter or send a message via{" "}
+            No matching questions found for &ldquo;{searchQuery}&rdquo;. Try clearing your search or send a message via{" "}
             <a
               href={INFO_PAGES.support.path}
               onClick={(e) => {
