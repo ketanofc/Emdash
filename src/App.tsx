@@ -725,6 +725,8 @@ export default function App() {
             onOpenWebAgent={() => navigateToMode("web")}
             onOpenDocs={(section = "docs") => openInfoPage(section)}
             onOpenSponsor={handleOpenSponsorship}
+            isDark={isDark}
+            onToggleTheme={handleToggleTheme}
           />
         </>
       ) : mode === "admin" ? (
@@ -758,6 +760,8 @@ export default function App() {
             onOpenWebAgent={() => navigateToMode("web")}
             onOpenDocs={(section = "docs") => openInfoPage(section)}
             onOpenSponsor={handleOpenSponsorship}
+            isDark={isDark}
+            onToggleTheme={handleToggleTheme}
           />
         </>
       ) : mode === "info" ? (
@@ -780,6 +784,8 @@ export default function App() {
             onOpenWebAgent={() => navigateToMode("web")}
             onOpenDocs={(section = "docs") => openInfoPage(section)}
             onOpenSponsor={handleOpenSponsorship}
+            isDark={isDark}
+            onToggleTheme={handleToggleTheme}
           />
         </>
       ) : mode === "home" ? (
@@ -799,6 +805,8 @@ export default function App() {
             onOpenWebAgent={() => navigateToMode("web")}
             onOpenDocs={(section = "docs") => openInfoPage(section)}
             onOpenSponsor={handleOpenSponsorship}
+            isDark={isDark}
+            onToggleTheme={handleToggleTheme}
           />
         </>
       ) : (

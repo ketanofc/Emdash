@@ -1,5 +1,8 @@
-import { LifeBuoy } from "lucide-react";
+import { LifeBuoy, Monitor, Moon, Sun } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { Button } from "@/src/components/ui/button";
 import { CornerBrackets } from "@/src/components/CornerBrackets";
+import { cn } from "@/src/lib/utils";
 
 export type DocSection =
   | "docs"
@@ -20,6 +23,8 @@ interface FooterProps {
   onOpenWebAgent: () => void;
   onOpenDocs: (section?: DocSection) => void;
   onOpenSponsor: () => void;
+  isDark?: boolean;
+  onToggleTheme?: (e?: React.MouseEvent<HTMLButtonElement>) => void;
 }
 
 type SocialKey = "x" | "github" | "discord" | "linkedin";
@@ -85,6 +90,8 @@ export function Footer({
   onOpenWebAgent,
   onOpenDocs,
   onOpenSponsor,
+  isDark,
+  onToggleTheme,
 }: FooterProps) {
   const currentYear = new Date().getFullYear();
 
@@ -95,8 +102,8 @@ export function Footer({
 
         <div className="grid grid-cols-2 lg:grid-cols-[1.6fr_1.1fr_0.9fr] gap-x-6 gap-y-8 px-4 sm:px-6 md:px-10 py-8 sm:py-10">
           {/* Brand Column */}
-          <div className="col-span-2 lg:col-span-1 flex flex-col justify-between gap-5 min-w-0">
-            <div>
+          <div className="col-span-2 lg:col-span-1 flex flex-col justify-between gap-2.5 min-w-0">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={() => {
@@ -112,10 +119,12 @@ export function Footer({
                 />
                 <span>Emdash</span>
               </button>
-              <p className="mt-3 text-xs sm:text-[13px] leading-relaxed text-muted-foreground max-w-sm">
-                Build web apps, landing pages, and interactive tools from a single prompt. Free to start · Supported by ads.
-              </p>
+
+
             </div>
+            <p className="mt-1 text-xs sm:text-[13px] leading-relaxed text-muted-foreground max-w-sm">
+              Build web apps, landing pages, and interactive tools from a single prompt. Free to start · Supported by ads.
+            </p>
 
             <nav aria-label="Footer product navigation" className="flex flex-wrap items-center gap-x-5 gap-y-2">
               <button
@@ -395,22 +404,60 @@ export function Footer({
             &copy; {currentYear} Emdash.
           </p>
 
-          <nav aria-label="Social media" className="flex items-center gap-1.5">
-            {SOCIAL_LINKS.map((item) => (
-              <a
-                key={item.key}
-                href={item.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={item.label}
-                title={item.label}
-                className="inline-flex items-center justify-center size-7 border border-edge bg-background text-muted-foreground hover:text-primary hover:border-primary transition-colors"
+          <div className="flex items-center gap-3">
+            {onToggleTheme && (
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={(e) => onToggleTheme(e)}
+                aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+                className="relative overflow-hidden size-7 border border-edge bg-background text-muted-foreground hover:text-foreground hover:bg-muted shrink-0 rounded-none"
               >
-                <SocialBrandIcon kind={item.key} />
-                <span className="sr-only">{item.label}</span>
-              </a>
-            ))}
-          </nav>
+                <AnimatePresence mode="wait" initial={false}>
+                  {isDark ? (
+                    <motion.span
+                      key="sun"
+                      initial={{ opacity: 0, rotate: -60, scale: 0.6 }}
+                      animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                      exit={{ opacity: 0, rotate: 60, scale: 0.6 }}
+                      transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                      className="inline-flex items-center justify-center"
+                    >
+                      <Sun className="size-3.5" />
+                    </motion.span>
+                  ) : (
+                    <motion.span
+                      key="moon"
+                      initial={{ opacity: 0, rotate: 60, scale: 0.6 }}
+                      animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                      exit={{ opacity: 0, rotate: -60, scale: 0.6 }}
+                      transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                      className="inline-flex items-center justify-center"
+                    >
+                      <Moon className="size-3.5" />
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </Button>
+            )}
+
+            <nav aria-label="Social media" className="flex items-center gap-3">
+              {SOCIAL_LINKS.map((item) => (
+                <a
+                  key={item.key}
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={item.label}
+                  title={item.label}
+                  className="inline-flex items-center justify-center size-7 border border-edge bg-background text-muted-foreground hover:text-primary hover:border-primary transition-colors"
+                >
+                  <SocialBrandIcon kind={item.key} />
+                  <span className="sr-only">{item.label}</span>
+                </a>
+              ))}
+            </nav>
+          </div>
         </div>
       </div>
     </footer>

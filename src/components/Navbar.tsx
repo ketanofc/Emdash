@@ -143,39 +143,7 @@ export function Navbar({
         </nav>
 
         <div className="flex items-center justify-end gap-1.5 sm:gap-2 shrink-0 md:flex-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={(e) => onToggleTheme(e)}
-            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-            className="relative overflow-hidden size-8 sm:size-9 text-foreground hover:bg-transparent hover:text-primary shrink-0"
-          >
-            <AnimatePresence mode="wait" initial={false}>
-              {isDark ? (
-                <motion.span
-                  key="sun"
-                  initial={{ opacity: 0, rotate: -60, scale: 0.6 }}
-                  animate={{ opacity: 1, rotate: 0, scale: 1 }}
-                  exit={{ opacity: 0, rotate: 60, scale: 0.6 }}
-                  transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                  className="inline-flex items-center justify-center"
-                >
-                  <Sun className="size-4" />
-                </motion.span>
-              ) : (
-                <motion.span
-                  key="moon"
-                  initial={{ opacity: 0, rotate: 60, scale: 0.6 }}
-                  animate={{ opacity: 1, rotate: 0, scale: 1 }}
-                  exit={{ opacity: 0, rotate: -60, scale: 0.6 }}
-                  transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                  className="inline-flex items-center justify-center"
-                >
-                  <Moon className="size-4" />
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </Button>
+
 
           {user ? (
             <Button
