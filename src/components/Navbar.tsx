@@ -347,26 +347,14 @@ export function Navbar({
                   </Button>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-2 p-3 bg-background/50">
+                <div className="p-3 bg-background/50">
                   <Button
                     type="button"
-                    variant="outline"
                     size="sm"
                     onClick={() => handleNavAction(() => onOpenAuth("signin"))}
-                    className={cn(
-                      "h-9 border-edge bg-background hover:bg-muted font-mono uppercase text-xs",
-                      mode === "signin" && "border-primary text-primary"
-                    )}
+                    className="w-full h-9 font-mono uppercase text-xs"
                   >
                     Sign in
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => handleNavAction(() => onOpenAuth("signup"))}
-                    className="h-9 font-mono uppercase text-xs"
-                  >
-                    Sign up
                   </Button>
                 </div>
               )}
