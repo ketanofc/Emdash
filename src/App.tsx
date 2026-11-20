@@ -261,6 +261,20 @@ export default function App() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (mode === "info") {
+      const meta = INFO_PAGES[infoPage];
+      document.title = `${meta.shortTitle} — Emdash`;
+    } else if (mode === "sponsorship") {
+      document.title = "Sponsorship — Emdash";
+    } else if (mode === "web") {
+      document.title = "Web Agent — Emdash";
+    } else {
+      document.title = "Emdash – Build Apps Free With a Single Prompt";
+    }
+  }, [infoPage, mode]);
+
   const navigateToMode = useCallback((nextMode: AppMode) => {
     setMode(nextMode);
     if (typeof window !== "undefined" && nextMode !== "info") {

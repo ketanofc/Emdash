@@ -142,64 +142,136 @@ export function Footer({
               >
                 Sponsorship
               </button>
-              <button
-                type="button"
-                onClick={() => onOpenDocs("blog")}
+              <a
+                href="/blog"
+                onClick={(e) => {
+                  if (
+                    e.metaKey ||
+                    e.ctrlKey ||
+                    e.shiftKey ||
+                    e.altKey ||
+                    e.button !== 0
+                  ) {
+                    return;
+                  }
+                  e.preventDefault();
+                  onOpenDocs("blog");
+                }}
                 className="text-xs font-medium text-foreground hover:text-primary transition-colors whitespace-nowrap shrink-0 cursor-pointer py-1"
               >
                 Blog
-              </button>
+              </a>
             </nav>
           </div>
 
           {/* Support Documentation Column */}
           <div className="col-span-1 min-w-0">
             <h2 className="mb-3">
-              <button
-                type="button"
-                onClick={() => onOpenDocs("docs")}
-                className="text-xs font-semibold text-foreground hover:text-primary tracking-tight transition-colors cursor-pointer text-left"
+              <a
+                href="/docs"
+                onClick={(e) => {
+                  if (
+                    e.metaKey ||
+                    e.ctrlKey ||
+                    e.shiftKey ||
+                    e.altKey ||
+                    e.button !== 0
+                  ) {
+                    return;
+                  }
+                  e.preventDefault();
+                  onOpenDocs("docs");
+                }}
+                className="text-xs font-semibold text-foreground hover:text-primary tracking-tight transition-colors cursor-pointer text-left inline-block"
               >
                 Support documentation
-              </button>
+              </a>
             </h2>
             <ul className="space-y-1.5">
               <li>
-                <button
-                  type="button"
-                  onClick={() => onOpenDocs("quickstart")}
+                <a
+                  href="/quickstart"
+                  onClick={(e) => {
+                    if (
+                      e.metaKey ||
+                      e.ctrlKey ||
+                      e.shiftKey ||
+                      e.altKey ||
+                      e.button !== 0
+                    ) {
+                      return;
+                    }
+                    e.preventDefault();
+                    onOpenDocs("quickstart");
+                  }}
                   className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors py-1 cursor-pointer text-left"
                 >
                   <span>Quickstart guide</span>
-                </button>
+                </a>
               </li>
               <li>
-                <button
-                  type="button"
-                  onClick={() => onOpenDocs("prompting")}
+                <a
+                  href="/prompting"
+                  onClick={(e) => {
+                    if (
+                      e.metaKey ||
+                      e.ctrlKey ||
+                      e.shiftKey ||
+                      e.altKey ||
+                      e.button !== 0
+                    ) {
+                      return;
+                    }
+                    e.preventDefault();
+                    onOpenDocs("prompting");
+                  }}
                   className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors py-1 cursor-pointer text-left"
                 >
                   <span>Prompting &amp; file uploads</span>
-                </button>
+                </a>
               </li>
               <li>
-                <button
-                  type="button"
-                  onClick={() => onOpenDocs("faq")}
+                <a
+                  href="/faq"
+                  onClick={(e) => {
+                    if (
+                      e.metaKey ||
+                      e.ctrlKey ||
+                      e.shiftKey ||
+                      e.altKey ||
+                      e.button !== 0
+                    ) {
+                      return;
+                    }
+                    e.preventDefault();
+                    onOpenDocs("faq");
+                  }}
                   className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors py-1 cursor-pointer text-left"
                 >
                   <span>FAQ</span>
-                </button>
+                </a>
               </li>
               <li>
-                <button
-                  type="button"
-                  onClick={() => onOpenDocs("support")}
+                <a
+                  href="/support"
+                  onClick={(e) => {
+                    if (
+                      e.metaKey ||
+                      e.ctrlKey ||
+                      e.shiftKey ||
+                      e.altKey ||
+                      e.button !== 0
+                    ) {
+                      return;
+                    }
+                    e.preventDefault();
+                    onOpenDocs("support");
+                  }}
                   className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors py-1 cursor-pointer text-left"
                 >
                   <LifeBuoy className="size-3 shrink-0" aria-hidden="true" />
                   <span>Email support</span>
-                </button>
+                </a>
               </li>
             </ul>
           </div>
@@ -207,50 +279,110 @@ export function Footer({
           {/* Legal Column */}
           <div className="col-span-1 min-w-0">
             <h2 className="mb-3">
-              <button
-                type="button"
-                onClick={() => onOpenDocs("legal")}
-                className="text-xs font-semibold text-foreground hover:text-primary tracking-tight transition-colors cursor-pointer text-left"
+              <a
+                href="/legal"
+                onClick={(e) => {
+                  if (
+                    e.metaKey ||
+                    e.ctrlKey ||
+                    e.shiftKey ||
+                    e.altKey ||
+                    e.button !== 0
+                  ) {
+                    return;
+                  }
+                  e.preventDefault();
+                  onOpenDocs("legal");
+                }}
+                className="text-xs font-semibold text-foreground hover:text-primary tracking-tight transition-colors cursor-pointer text-left inline-block"
               >
                 Legal
-              </button>
+              </a>
             </h2>
             <ul className="space-y-1.5">
               <li>
-                <button
-                  type="button"
-                  onClick={() => onOpenDocs("privacy")}
+                <a
+                  href="/privacy"
+                  onClick={(e) => {
+                    if (
+                      e.metaKey ||
+                      e.ctrlKey ||
+                      e.shiftKey ||
+                      e.altKey ||
+                      e.button !== 0
+                    ) {
+                      return;
+                    }
+                    e.preventDefault();
+                    onOpenDocs("privacy");
+                  }}
                   className="inline-flex items-center text-xs text-muted-foreground hover:text-primary transition-colors py-1 cursor-pointer text-left whitespace-nowrap"
                 >
                   Privacy Policy
-                </button>
+                </a>
               </li>
               <li>
-                <button
-                  type="button"
-                  onClick={() => onOpenDocs("terms")}
+                <a
+                  href="/terms"
+                  onClick={(e) => {
+                    if (
+                      e.metaKey ||
+                      e.ctrlKey ||
+                      e.shiftKey ||
+                      e.altKey ||
+                      e.button !== 0
+                    ) {
+                      return;
+                    }
+                    e.preventDefault();
+                    onOpenDocs("terms");
+                  }}
                   className="inline-flex items-center text-xs text-muted-foreground hover:text-primary transition-colors py-1 cursor-pointer text-left whitespace-nowrap"
                 >
                   Terms of Service
-                </button>
+                </a>
               </li>
               <li>
-                <button
-                  type="button"
-                  onClick={() => onOpenDocs("security")}
+                <a
+                  href="/security"
+                  onClick={(e) => {
+                    if (
+                      e.metaKey ||
+                      e.ctrlKey ||
+                      e.shiftKey ||
+                      e.altKey ||
+                      e.button !== 0
+                    ) {
+                      return;
+                    }
+                    e.preventDefault();
+                    onOpenDocs("security");
+                  }}
                   className="inline-flex items-center text-xs text-muted-foreground hover:text-primary transition-colors py-1 cursor-pointer text-left whitespace-nowrap"
                 >
                   Security
-                </button>
+                </a>
               </li>
               <li>
-                <button
-                  type="button"
-                  onClick={() => onOpenDocs("trust")}
+                <a
+                  href="/trust"
+                  onClick={(e) => {
+                    if (
+                      e.metaKey ||
+                      e.ctrlKey ||
+                      e.shiftKey ||
+                      e.altKey ||
+                      e.button !== 0
+                    ) {
+                      return;
+                    }
+                    e.preventDefault();
+                    onOpenDocs("trust");
+                  }}
                   className="inline-flex items-center text-xs text-muted-foreground hover:text-primary transition-colors py-1 cursor-pointer text-left whitespace-nowrap"
                 >
                   Trust Center
-                </button>
+                </a>
               </li>
             </ul>
           </div>

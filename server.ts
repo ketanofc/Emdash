@@ -61,6 +61,8 @@ function getAllowedOrigins(): Set<string> {
     process.env.APP_URL,
     vercelProdUrl ? `https://${vercelProdUrl.replace(/^https?:\/\//, "")}` : "",
     vercelUrl ? `https://${vercelUrl.replace(/^https?:\/\//, "")}` : "",
+    "https://emdash.world",
+    "https://www.emdash.world",
     "https://emdashworld.vercel.app",
     `http://localhost:${PORT}`,
     `http://127.0.0.1:${PORT}`,

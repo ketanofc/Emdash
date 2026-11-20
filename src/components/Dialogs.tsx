@@ -706,10 +706,10 @@ export function SupportDocsDialog({
                   </a>{" "}
                   or email{" "}
                   <a
-                    href="mailto:support@emdash.build"
+                    href="mailto:info@emdash.world"
                     className="text-primary hover:underline"
                   >
-                    support@emdash.build
+                    info@emdash.world
                   </a>
                   .
                 </p>
@@ -720,10 +720,10 @@ export function SupportDocsDialog({
 
         <DialogFooter className="sm:justify-between">
           <a
-            href="mailto:support@emdash.build"
+            href="mailto:info@emdash.world"
             className="text-xs text-muted-foreground hover:text-primary transition-colors self-center"
           >
-            Need direct help? support@emdash.build
+            Need direct help? info@emdash.world
           </a>
           <Button
             type="button"
