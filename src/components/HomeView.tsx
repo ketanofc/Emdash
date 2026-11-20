@@ -161,7 +161,7 @@ export function HomeView({
           </h1>
 
           <p className="mt-4 max-w-xl tracking-tight text-muted-foreground text-sm lg:text-base text-center">
-            Describe a web app, landing page, or interactive tool. Preview on every viewport, iterate in chat, and export standalone code.
+            Describe an app, preview live, and export standalone code.
           </p>
 
           {/* Composer Box with Culio Corner Brackets */}

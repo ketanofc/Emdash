@@ -419,13 +419,16 @@ export default function App() {
     [isPro, refreshSessionAndWallet]
   );
 
-  const handleOpenAuth = useCallback(() => {
-    if (user) {
-      setAuthOpen(true);
-    } else {
-      navigateToMode("signin");
-    }
-  }, [navigateToMode, user]);
+  const handleOpenAuth = useCallback(
+    (targetMode: "signin" | "signup" = "signin") => {
+      if (user) {
+        setAuthOpen(true);
+      } else {
+        navigateToMode(targetMode);
+      }
+    },
+    [navigateToMode, user]
+  );
 
   const handleSignOut = useCallback(() => {
     setUser(null);

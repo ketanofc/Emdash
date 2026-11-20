@@ -17,7 +17,7 @@ interface NavbarProps {
   onOpenSponsor?: () => void;
   onOpenWallet?: () => void;
   onOpenAdmin?: () => void;
-  onOpenAuth: () => void;
+  onOpenAuth: (authMode?: "signin" | "signup") => void;
   user: UserSession | null;
   walletBalance?: number;
 }
@@ -144,11 +144,11 @@ export function Navbar({
 
         <div className="flex items-center justify-end gap-1.5 sm:gap-2 shrink-0 md:flex-1">
           <Button
-            variant="outline"
+            variant="ghost"
             size="icon"
             onClick={(e) => onToggleTheme(e)}
             aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-            className="relative overflow-hidden size-8 sm:size-9 border-edge bg-background hover:bg-muted shrink-0"
+            className="relative overflow-hidden size-8 sm:size-9 text-foreground hover:bg-transparent hover:text-primary shrink-0"
           >
             <AnimatePresence mode="wait" initial={false}>
               {isDark ? (
@@ -181,7 +181,7 @@ export function Navbar({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => handleNavAction(onOpenAuth)}
+              onClick={() => handleNavAction(() => onOpenAuth())}
               className="h-8 sm:h-9 px-2 sm:px-3 gap-1.5 sm:gap-2 border-edge bg-background hover:bg-muted font-mono uppercase text-[11px] sm:text-xs shrink-0"
             >
               <span className="size-5 bg-primary text-primary-foreground grid place-items-center text-[11px] font-mono font-bold">
@@ -194,8 +194,8 @@ export function Navbar({
           ) : mode !== "signin" && mode !== "signup" ? (
             <Button
               size="sm"
-              onClick={() => handleNavAction(onOpenAuth)}
-              className="h-8 sm:h-9 px-2.5 sm:px-4 font-mono uppercase text-[11px] sm:text-xs shrink-0"
+              onClick={() => handleNavAction(() => onOpenAuth("signin"))}
+              className="hidden md:inline-flex h-8 sm:h-9 px-2.5 sm:px-4 font-mono uppercase text-[11px] sm:text-xs shrink-0"
             >
               Sign in
             </Button>
@@ -203,12 +203,12 @@ export function Navbar({
 
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             size="icon"
             onClick={() => setMobileMenuOpen((open) => !open)}
             aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
             aria-expanded={mobileMenuOpen}
-            className="size-8 sm:size-9 border-edge bg-background hover:bg-muted md:hidden shrink-0 touch-manipulation"
+            className="size-8 sm:size-9 text-foreground hover:bg-transparent hover:text-primary md:hidden shrink-0 touch-manipulation"
           >
             <span aria-hidden="true" className="relative flex items-center justify-center size-4">
               <motion.span
@@ -332,6 +332,43 @@ export function Navbar({
                     <ArrowUpRight className="size-3.5" />
                   </span>
                 </button>
+              )}
+              {user ? (
+                <div className="p-3 bg-background/50">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleNavAction(() => onOpenAuth())}
+                    className="w-full h-9 justify-between border-edge bg-background hover:bg-muted font-mono uppercase text-xs"
+                  >
+                    <span className="truncate">{user.name}</span>
+                    <span className="text-muted-foreground">Account</span>
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2 p-3 bg-background/50">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleNavAction(() => onOpenAuth("signin"))}
+                    className={cn(
+                      "h-9 border-edge bg-background hover:bg-muted font-mono uppercase text-xs",
+                      mode === "signin" && "border-primary text-primary"
+                    )}
+                  >
+                    Sign in
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => handleNavAction(() => onOpenAuth("signup"))}
+                    className="h-9 font-mono uppercase text-xs"
+                  >
+                    Sign up
+                  </Button>
+                </div>
               )}
             </div>
           </nav>
