@@ -651,7 +651,7 @@ export function WebAgentPage({
           aria-label="Back to Emdash home"
           className="flex items-center gap-2.5 font-semibold text-base tracking-tight text-foreground hover:opacity-80 transition-opacity cursor-pointer group"
         >
-          <span className="flex items-center gap-1.5 sm:gap-2">
+          <span className="flex items-center gap-1 sm:gap-1.5">
             <img
               src="/assets/emdash-logo.png"
               alt=""

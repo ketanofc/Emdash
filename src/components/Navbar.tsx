@@ -73,7 +73,7 @@ export function Navbar({
             type="button"
             onClick={() => handleNavAction(onGoHome)}
             aria-label="Emdash home"
-            className="flex items-center gap-1.5 sm:gap-2 font-semibold text-base sm:text-lg tracking-tight px-1 py-1 hover:opacity-85 transition-opacity focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring whitespace-nowrap shrink-0 cursor-pointer"
+            className="flex items-center gap-1 sm:gap-1.5 font-semibold text-base sm:text-lg tracking-tight px-1 py-1 hover:opacity-85 transition-opacity focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring whitespace-nowrap shrink-0 cursor-pointer"
           >
             <img
               src="/assets/emdash-logo.png"
