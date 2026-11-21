@@ -649,9 +649,9 @@ export function WebAgentPage({
           type="button"
           onClick={onGoHome}
           aria-label="Back to Emdash home"
-          className="flex items-center gap-2 font-semibold text-base tracking-tight text-foreground hover:opacity-80 transition-opacity cursor-pointer group"
+          className="flex items-center gap-2.5 font-semibold text-base tracking-tight text-foreground hover:opacity-80 transition-opacity cursor-pointer group"
         >
-          <span className="flex items-center gap-0.5">
+          <span className="flex items-center gap-1.5 sm:gap-2">
             <img
               src="/assets/emdash-logo.png"
               alt=""
@@ -1133,7 +1133,7 @@ export function WebAgentPage({
                       : "z-0 bg-transparent border-transparent border-b-edge hover:bg-card/80 text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  <span className="flex items-center gap-1.5 min-w-0">
+                  <span className="flex items-center gap-2 min-w-0">
                     <img
                       src="/assets/emdash-logo.png"
                       alt=""

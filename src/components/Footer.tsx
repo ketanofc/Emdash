@@ -110,7 +110,7 @@ export function Footer({
                   onGoHome();
                   window.scrollTo({ top: 0, behavior: "smooth" });
                 }}
-                className="inline-flex items-center gap-0.5 font-semibold text-base sm:text-lg tracking-tight text-foreground hover:opacity-85 transition-opacity focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
+                className="inline-flex items-center gap-1.5 sm:gap-2 font-semibold text-base sm:text-lg tracking-tight text-foreground hover:opacity-85 transition-opacity focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
               >
                 <img
                   src="/assets/emdash-logo.png"
