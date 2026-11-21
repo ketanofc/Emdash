@@ -276,12 +276,16 @@ export function createPublicApiRouter(ctx: ServerContext): express.Router {
         if (userId && jobId && coinCost > 0) {
           const supabaseAdmin = getSupabaseAdmin();
           if (supabaseAdmin) {
-            await supabaseAdmin.rpc("refund_coins", {
-              p_user_id: userId,
-              p_amount: coinCost,
-              p_reason: isRepairRoute ? "repair_refund" : "build_refund",
-              p_job_id: jobId,
-            }).catch(() => {});
+            try {
+              await supabaseAdmin.rpc("refund_coins", {
+                p_user_id: userId,
+                p_amount: coinCost,
+                p_reason: isRepairRoute ? "repair_refund" : "build_refund",
+                p_job_id: jobId,
+              });
+            } catch {
+              // ignore Supabase refund error and fall back to local store
+            }
           }
           walletBalance = ctx.store.refundCoins(
             userId,

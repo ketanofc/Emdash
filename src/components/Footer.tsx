@@ -110,12 +110,12 @@ export function Footer({
                   onGoHome();
                   window.scrollTo({ top: 0, behavior: "smooth" });
                 }}
-                className="inline-flex items-center gap-1 font-semibold text-base tracking-tight text-foreground hover:opacity-85 transition-opacity focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
+                className="inline-flex items-center gap-0.5 font-semibold text-base sm:text-lg tracking-tight text-foreground hover:opacity-85 transition-opacity focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
               >
                 <img
                   src="/assets/emdash-logo.png"
                   alt=""
-                  className="size-4.5 object-cover shrink-0"
+                  className="size-5 sm:size-6 object-cover shrink-0"
                 />
                 <span>Emdash</span>
               </button>
@@ -404,7 +404,7 @@ export function Footer({
             &copy; {currentYear} Emdash.
           </p>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
             {onToggleTheme && (
               <Button
                 variant="outline"
@@ -441,7 +441,7 @@ export function Footer({
               </Button>
             )}
 
-            <nav aria-label="Social media" className="flex items-center gap-3">
+            <nav aria-label="Social media" className="flex items-center gap-1.5">
               {SOCIAL_LINKS.map((item) => (
                 <a
                   key={item.key}

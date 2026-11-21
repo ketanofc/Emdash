@@ -73,12 +73,12 @@ export function Navbar({
             type="button"
             onClick={() => handleNavAction(onGoHome)}
             aria-label="Emdash home"
-            className="flex items-center gap-1 sm:gap-1.5 font-semibold text-sm sm:text-base tracking-tight px-1 py-1 hover:opacity-85 transition-opacity focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring whitespace-nowrap shrink-0 cursor-pointer"
+            className="flex items-center gap-0.5 font-semibold text-base sm:text-lg tracking-tight px-1 py-1 hover:opacity-85 transition-opacity focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring whitespace-nowrap shrink-0 cursor-pointer"
           >
             <img
               src="/assets/emdash-logo.png"
               alt=""
-              className="size-4 sm:size-5 object-cover shrink-0"
+              className="size-5 sm:size-6 object-cover shrink-0"
             />
             <span>Emdash</span>
           </button>
@@ -178,24 +178,24 @@ export function Navbar({
             aria-expanded={mobileMenuOpen}
             className="size-8 sm:size-9 text-foreground hover:bg-transparent hover:text-primary md:hidden shrink-0 touch-manipulation"
           >
-            <span aria-hidden="true" className="relative flex items-center justify-center size-4">
+            <span aria-hidden="true" className="relative flex items-center justify-center size-5">
               <motion.span
-                className="absolute h-[1.75px] w-4 bg-current"
+                className="absolute h-[2px] w-5 bg-current"
                 initial={false}
                 animate={
                   mobileMenuOpen
                     ? { y: 0, rotate: 45 }
-                    : { y: -3, rotate: 0 }
+                    : { y: -3.5, rotate: 0 }
                 }
                 transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
               />
               <motion.span
-                className="absolute h-[1.75px] w-4 bg-current"
+                className="absolute h-[2px] w-5 bg-current"
                 initial={false}
                 animate={
                   mobileMenuOpen
                     ? { y: 0, rotate: -45 }
-                    : { y: 3, rotate: 0 }
+                    : { y: 3.5, rotate: 0 }
                 }
                 transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
               />

@@ -540,12 +540,12 @@ export function WorkspaceView({
               type="button"
               onClick={onGoHome}
               aria-label="Emdash home"
-              className="flex items-center gap-1 sm:gap-1.5 font-semibold text-sm sm:text-base tracking-tight px-1 py-0.5 hover:opacity-85 transition-opacity focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring whitespace-nowrap shrink-0 cursor-pointer"
+              className="flex items-center gap-0.5 font-semibold text-base sm:text-lg tracking-tight px-1 py-0.5 hover:opacity-85 transition-opacity focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring whitespace-nowrap shrink-0 cursor-pointer"
             >
               <img
                 src="/assets/emdash-logo.png"
                 alt=""
-                className="size-4 sm:size-5 object-cover shrink-0"
+                className="size-5 sm:size-6 object-cover shrink-0"
               />
               <span>Emdash</span>
             </button>
@@ -610,7 +610,7 @@ export function WorkspaceView({
                       <img
                         src="/assets/emdash-logo.png"
                         alt="Emdash"
-                        className="size-4 object-cover shrink-0"
+                        className="size-4.5 object-cover shrink-0"
                       />
                       {msg.status === "thinking" ? (
                         <span className="inline-flex items-center gap-1.5 text-primary truncate">
@@ -1037,7 +1037,7 @@ export function WorkspaceView({
                   <img
                     src="/assets/emdash-logo.png"
                     alt="Emdash"
-                    className="size-6 object-cover mb-1.5"
+                    className="size-7 object-cover mb-1.5"
                   />
                   <span className="font-medium text-foreground text-sm">
                     Nothing here yet

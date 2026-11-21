@@ -649,14 +649,16 @@ export function WebAgentPage({
           type="button"
           onClick={onGoHome}
           aria-label="Back to Emdash home"
-          className="flex items-center gap-2 font-semibold text-sm tracking-tight text-foreground hover:opacity-80 transition-opacity cursor-pointer group"
+          className="flex items-center gap-2 font-semibold text-base tracking-tight text-foreground hover:opacity-80 transition-opacity cursor-pointer group"
         >
-          <img
-            src="/assets/emdash-logo.png"
-            alt=""
-            className="size-4 object-cover shrink-0"
-          />
-          <span className="font-semibold tracking-tight">Emdash</span>
+          <span className="flex items-center gap-0.5">
+            <img
+              src="/assets/emdash-logo.png"
+              alt=""
+              className="size-5 sm:size-6 object-cover shrink-0"
+            />
+            <span className="font-semibold tracking-tight">Emdash</span>
+          </span>
           <span className="font-mono uppercase text-[10px] px-1.5 py-0.5 border border-edge bg-background text-muted-foreground group-hover:text-foreground">
             Web Agent
           </span>
@@ -1131,12 +1133,12 @@ export function WebAgentPage({
                       : "z-0 bg-transparent border-transparent border-b-edge hover:bg-card/80 text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  <span className="flex items-center gap-2 min-w-0">
+                  <span className="flex items-center gap-1.5 min-w-0">
                     <img
                       src="/assets/emdash-logo.png"
                       alt=""
                       className={cn(
-                        "size-3.5 object-cover shrink-0",
+                        "size-4 object-cover shrink-0",
                         selected ? "opacity-90" : "opacity-55 group-hover:opacity-80"
                       )}
                     />
