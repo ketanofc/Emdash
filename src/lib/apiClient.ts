@@ -16,8 +16,15 @@ export class ApiClientError extends Error {
   }
 }
 
+function shouldUseEdgeFunctions(): boolean {
+  if (typeof import.meta !== "undefined" && import.meta.env) {
+    return import.meta.env.VITE_USE_SUPABASE_EDGE_FUNCTIONS === "true";
+  }
+  return false;
+}
+
 function buildApiUrl(edgeFunction: "wallet" | "generate" | "repair" | "admin", subPath = ""): string {
-  if (isSupabaseConfigured()) {
+  if (shouldUseEdgeFunctions() && isSupabaseConfigured()) {
     return `${getSupabaseUrl()}/functions/v1/${edgeFunction}${subPath}`;
   }
   return `/api/${edgeFunction}${subPath}`;
@@ -28,14 +35,29 @@ async function apiFetch<T>(
   init: RequestInit = {}
 ): Promise<T> {
   const authHeaders = await getAuthHeaders();
-  const res = await fetch(url, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...authHeaders,
-      ...(init.headers || {}),
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders,
+        ...(init.headers || {}),
+      },
+    });
+  } catch (err) {
+    if (url.includes("/functions/v1/")) {
+      const fallbackUrl = url.replace(/https?:\/\/[^\/]+\/functions\/v1/, "/api");
+      return apiFetch<T>(fallbackUrl, init);
+    }
+    throw err;
+  }
+
+  // Graceful fallback from Supabase Edge Function to local/Vercel server API if un-deployed
+  if (res.status === 404 && url.includes("/functions/v1/")) {
+    const fallbackUrl = url.replace(/https?:\/\/[^\/]+\/functions\/v1/, "/api");
+    return apiFetch<T>(fallbackUrl, init);
+  }
 
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {

@@ -82,6 +82,26 @@ function decodeJwtAal(token: string): "aal1" | "aal2" {
   }
 }
 
+export function getSupabaseAdmin() {
+  const supabaseUrl = (
+    process.env.VITE_SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.SUPABASE_URL ||
+    ""
+  ).trim();
+  const serviceKey = (
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SECRET_KEY ||
+    ""
+  ).trim();
+  if (supabaseUrl && serviceKey) {
+    return createClient(supabaseUrl, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+  }
+  return null;
+}
+
 export async function resolveAuthenticatedUser(
   req: express.Request,
   ctx: ServerContext
@@ -126,29 +146,43 @@ export async function resolveAuthenticatedUser(
   }
 
   // Fallback: verify Supabase JWT if Supabase is configured on the server
-  const supabaseUrl = (
-    process.env.VITE_SUPABASE_URL ||
-    process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    process.env.SUPABASE_URL ||
-    ""
-  ).trim();
-  const serviceKey = (
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_SECRET_KEY ||
-    ""
-  ).trim();
-  if (supabaseUrl && serviceKey) {
+  const supabaseAdmin = getSupabaseAdmin();
+  if (supabaseAdmin) {
     try {
-      const supabaseAdmin = createClient(supabaseUrl, serviceKey, {
-        auth: { persistSession: false, autoRefreshToken: false },
-      });
       const { data, error } = await supabaseAdmin.auth.getUser(token);
       if (!error && data?.user) {
-        const { data: dbProfile } = await supabaseAdmin
+        let { data: dbProfile } = await supabaseAdmin
           .from("profiles")
           .select("*")
           .eq("user_id", data.user.id)
           .maybeSingle();
+
+        const adminEmail = (process.env.ADMIN_EMAIL || "admin@emdash.build").toLowerCase();
+        const userEmail = (data.user.email || "").toLowerCase();
+
+        // If profile does not exist, create it (in case trigger did not run)
+        if (!dbProfile) {
+          const isInitialAdmin = Boolean(userEmail && userEmail === adminEmail);
+          const { data: createdProfile } = await supabaseAdmin
+            .from("profiles")
+            .insert({
+              user_id: data.user.id,
+              email: data.user.email,
+              role: isInitialAdmin ? "admin" : "user",
+              status: "active",
+              last_seen_at: new Date().toISOString(),
+            })
+            .select("*")
+            .maybeSingle();
+          dbProfile = createdProfile;
+        }
+
+        // Auto-promote configured admin email if not yet marked as admin
+        if (dbProfile && userEmail === adminEmail && dbProfile.role !== "admin") {
+          await supabaseAdmin.from("profiles").update({ role: "admin" }).eq("user_id", data.user.id);
+          dbProfile.role = "admin";
+        }
+
         if (!dbProfile) {
           return { ok: false, status: 403, error: "Profile not found." };
         }
@@ -160,7 +194,7 @@ export async function resolveAuthenticatedUser(
           profile: {
             user_id: dbProfile.user_id,
             email: dbProfile.email,
-            name: dbProfile.email.split("@")[0] || "Builder",
+            name: (data.user.user_metadata?.name as string | undefined) || dbProfile.email.split("@")[0] || "Builder",
             role: dbProfile.role === "admin" ? "admin" : "user",
             status: dbProfile.status === "suspended" ? "suspended" : "active",
             country: dbProfile.country,

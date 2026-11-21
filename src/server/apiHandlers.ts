@@ -5,7 +5,7 @@ import { callLLM } from "../lib/llm/router.ts";
 import { AdapterHttpError, NoAvailableProviderError, type RouteStage } from "../lib/llm/types.ts";
 import { runPipeline } from "../lib/pipeline.ts";
 import type { AttachedFile, BuildPlan, DesignBrief, GeneratedFiles, PipelineStage } from "../types.ts";
-import { resolveAuthenticatedUser, type ServerContext } from "./adminRouter.ts";
+import { getSupabaseAdmin, resolveAuthenticatedUser, type ServerContext } from "./adminRouter.ts";
 
 type WebAgentProvider = "gemini" | "openai" | "anthropic" | "openrouter";
 
@@ -56,6 +56,53 @@ export function createPublicApiRouter(ctx: ServerContext): express.Router {
     if (!auth.ok) {
       res.status(auth.status).json({ error: auth.error });
       return;
+    }
+
+    const supabaseAdmin = getSupabaseAdmin();
+    if (supabaseAdmin) {
+      try {
+        let { data: sbWallet } = await supabaseAdmin
+          .from("wallets")
+          .select("*")
+          .eq("user_id", auth.userId)
+          .maybeSingle();
+
+        if (!sbWallet) {
+          const { data: inserted } = await supabaseAdmin
+            .from("wallets")
+            .insert({
+              user_id: auth.userId,
+              balance: config.daily_grant,
+              last_grant_at: new Date().toISOString(),
+            })
+            .select("*")
+            .single();
+          sbWallet = inserted;
+        }
+
+        const { data: sbLedger } = await supabaseAdmin
+          .from("coin_ledger")
+          .select("id, delta, balance_after, reason, created_at")
+          .eq("user_id", auth.userId)
+          .order("created_at", { ascending: false })
+          .limit(25);
+
+        res.json({
+          balance: Number(sbWallet?.balance ?? config.daily_grant),
+          dailyGrant: config.daily_grant,
+          buildCost: config.costs.build,
+          repairCost: config.costs.repair,
+          maintenance: config.maintenance,
+          signupsEnabled: config.signups_enabled,
+          resetTimezone: config.reset_timezone,
+          role: auth.profile.role,
+          status: auth.profile.status,
+          ledger: sbLedger ?? [],
+        });
+        return;
+      } catch (err) {
+        console.warn("[emdash] Supabase wallet query failed, using local store:", err);
+      }
     }
 
     const wallet = ctx.store.ensureDailyGrant(auth.userId);
@@ -133,24 +180,48 @@ export function createPublicApiRouter(ctx: ServerContext): express.Router {
     if (userId) {
       const job = ctx.store.createJob(userId, isRepairRoute ? "repair" : "build", coinCost);
       jobId = job.id;
-      try {
-        walletBalance = ctx.store.spendCoins(
-          userId,
-          coinCost,
-          isRepairRoute ? "repair_job" : "build_job",
-          jobId
-        );
-      } catch (err) {
-        ctx.store.completeJob(jobId, "failed", "Insufficient Dash Coins");
-        if (err instanceof Error && err.message === "INSUFFICIENT_COINS") {
-          res.status(402).json({
-            code: "INSUFFICIENT_COINS",
-            error: "Insufficient Dash Coins for this build.",
+      const supabaseAdmin = getSupabaseAdmin();
+      if (supabaseAdmin && coinCost > 0) {
+        try {
+          const { data: newBal, error: rpcErr } = await supabaseAdmin.rpc("spend_coins", {
+            p_user_id: userId,
+            p_amount: coinCost,
+            p_reason: isRepairRoute ? "repair_job" : "build_job",
+            p_job_id: jobId,
           });
+          if (rpcErr) {
+            ctx.store.completeJob(jobId, "failed", "Insufficient Dash Coins");
+            res.status(402).json({
+              code: "INSUFFICIENT_COINS",
+              error: "Insufficient Dash Coins for this build.",
+            });
+            return;
+          }
+          walletBalance = typeof newBal === "number" ? newBal : undefined;
+        } catch {
+          // fallback to store
+        }
+      }
+      if (walletBalance === undefined) {
+        try {
+          walletBalance = ctx.store.spendCoins(
+            userId,
+            coinCost,
+            isRepairRoute ? "repair_job" : "build_job",
+            jobId
+          );
+        } catch (err) {
+          ctx.store.completeJob(jobId, "failed", "Insufficient Dash Coins");
+          if (err instanceof Error && err.message === "INSUFFICIENT_COINS") {
+            res.status(402).json({
+              code: "INSUFFICIENT_COINS",
+              error: "Insufficient Dash Coins for this build.",
+            });
+            return;
+          }
+          res.status(500).json({ error: "Failed to process Dash Coins." });
           return;
         }
-        res.status(500).json({ error: "Failed to process Dash Coins." });
-        return;
       }
     }
 
@@ -203,6 +274,15 @@ export function createPublicApiRouter(ctx: ServerContext): express.Router {
         return { ...result, walletBalance };
       } catch (err) {
         if (userId && jobId && coinCost > 0) {
+          const supabaseAdmin = getSupabaseAdmin();
+          if (supabaseAdmin) {
+            await supabaseAdmin.rpc("refund_coins", {
+              p_user_id: userId,
+              p_amount: coinCost,
+              p_reason: isRepairRoute ? "repair_refund" : "build_refund",
+              p_job_id: jobId,
+            }).catch(() => {});
+          }
           walletBalance = ctx.store.refundCoins(
             userId,
             coinCost,

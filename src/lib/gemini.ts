@@ -315,9 +315,13 @@ export async function runPipelineViaServer(
     typeof import.meta !== "undefined" && import.meta.env
       ? (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim()
       : undefined;
+  const useEdgeFunctions =
+    typeof import.meta !== "undefined" &&
+    import.meta.env &&
+    import.meta.env.VITE_USE_SUPABASE_EDGE_FUNCTIONS === "true";
 
-  const endpoint =
-    supabaseUrl && supabaseAnon
+  let endpoint =
+    useEdgeFunctions && supabaseUrl && supabaseAnon
       ? `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/${isRepair ? "repair" : "generate"}`
       : isRepair
         ? "/api/repair"
@@ -338,7 +342,7 @@ export async function runPipelineViaServer(
     }
   }
 
-  const res = await fetchWithTimeout(
+  let res = await fetchWithTimeout(
     endpoint,
     {
       method: "POST",
@@ -355,6 +359,28 @@ export async function runPipelineViaServer(
     },
     PIPELINE_TIMEOUT_MS
   );
+
+  // Fallback to local/app server if Supabase Edge Function is not deployed
+  if (!res.ok && res.status === 404 && endpoint.includes("/functions/v1/")) {
+    endpoint = isRepair ? "/api/repair" : "/api/gemini/pipeline";
+    res = await fetchWithTimeout(
+      endpoint,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          prompt: userPrompt,
+          model: normalizeModelId(options.model),
+          brief: options.brief,
+          files: options.files,
+          runtimeErrors: options.runtimeErrors,
+          attachments: options.attachments,
+        }),
+        signal: options.signal,
+      },
+      PIPELINE_TIMEOUT_MS
+    );
+  }
 
   if (!res.ok) {
     const detail = await extractServerError(res);
