@@ -6,7 +6,10 @@ let supabaseUrl =
     : "";
 let supabaseAnonKey =
   typeof import.meta !== "undefined" && import.meta.env
-    ? (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() || ""
+    ? (
+        (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ||
+        (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)
+      )?.trim() || ""
     : "";
 
 let cachedClient: SupabaseClient | null = null;
