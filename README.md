@@ -1,11 +1,10 @@
 <div align="center">
 
-<h1>
-  <img src="public/assets/emdash-icon.png" alt="Emdash logo icon" width="44" align="middle" />
-  Emdash
-</h1>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="public/assets/emdash-wordmark-dark.png">
+  <img src="public/assets/emdash-wordmark.png" alt="Emdash" width="260" />
+</picture>
 
-**Say it. Ship it.**
 
 Free, open-source AI app builder and web coding agent.<br>
 Describe what you want, preview it live, iterate in chat, and keep the code.
@@ -262,9 +261,9 @@ emdash/
 │  └─ tokens.ts            # design token injection
 ├─ public/
 │  └─ assets/
-│     ├─ emdash-icon.png        # Orange dash icon (used in this README)
-│     ├─ emdash-logo.png        # Full logo for light backgrounds
-│     └─ emdash-logo-dark.png   # Full logo for dark backgrounds
+│     ├─ emdash-wordmark.png       # Dash icon + name, for light backgrounds (README header)
+│     ├─ emdash-wordmark-dark.png  # Dash icon + name, for dark backgrounds
+│     └─ emdash-logo.png           # Orange dash icon only
 ├─ .env.example
 └─ README.md
 ```
@@ -278,7 +277,7 @@ Emdash has a distinct visual identity. Please follow it in contributions.
 - **Details:** mono uppercase labels, crop-mark corner brackets, hatched divider bands, dashed sponsor slots with an "AD" badge
 - **Themes:** light and dark
 - **Accessibility:** 4.5:1 text contrast, visible focus rings, reduced-motion support
-- **Logo:** the orange dash icon (`public/assets/emdash-icon.png`) with the "Emdash" name set beside it as text. Keep clear space around it, and don't recolor, stretch, or rotate the icon.
+- **Logo:** the orange dash with the "Emdash" name on the same line, vertically centered. Use `public/assets/emdash-wordmark.png` on light backgrounds and `emdash-wordmark-dark.png` on dark ones. `emdash-logo.png` is the dash icon alone. Keep clear space, and don't recolor, stretch, or rotate it.
 
 ### Typography
 
