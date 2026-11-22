@@ -335,7 +335,7 @@ export default function AdminPage({ onBackHome, onOpenAuth }: AdminPageProps) {
               <div className="font-mono uppercase text-[10px] text-primary">
                 Emdash Control Plane · Administrator
               </div>
-              <div className="text-sm font-semibold">{authState.user.email}</div>
+              <div className="text-sm font-semibold">{authState?.user?.email || "admin@emdash.build"}</div>
             </div>
           </div>
 

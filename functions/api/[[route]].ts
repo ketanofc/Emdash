@@ -1,6 +1,9 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 interface Env {
+  ASSETS?: {
+    fetch: (request: Request | string, init?: RequestInit) => Promise<Response>;
+  };
   VITE_SUPABASE_URL?: string;
   VITE_SUPABASE_ANON_KEY?: string;
   VITE_SUPABASE_PUBLISHABLE_KEY?: string;
@@ -592,6 +595,13 @@ export default {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/api")) {
       return handleApiRequest(request, env);
+    }
+    if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
+      const res = await env.ASSETS.fetch(request);
+      if (res.status === 404 && !url.pathname.includes(".")) {
+        return env.ASSETS.fetch(new Request(new URL("/", request.url), request));
+      }
+      return res;
     }
     return new Response("Not found", { status: 404 });
   },
