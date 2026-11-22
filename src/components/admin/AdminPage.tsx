@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { Component, useEffect, useState, type ErrorInfo, type ReactNode } from "react";
 import {
   Activity,
   ArrowLeft,
@@ -36,6 +36,57 @@ import { AdminSettingsTab } from "./AdminSettingsTab";
 import { AdminAuditTab } from "./AdminAuditTab";
 import { AdminDashboardSection } from "./AdminDashboardSection";
 import { cn } from "@/src/lib/utils";
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+  fallbackTitle?: string;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class AdminErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("[Emdash Admin ErrorBoundary]", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="border border-destructive/40 bg-card p-6 my-4 space-y-3 font-mono text-xs">
+          <div className="text-destructive font-semibold uppercase flex items-center gap-2">
+            <ShieldAlert className="size-4" />
+            <span>{this.props.fallbackTitle || "Admin Section Notice"}</span>
+          </div>
+          <p className="text-muted-foreground">
+            {this.state.error?.message || "An unexpected error occurred while rendering this section."}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => this.setState({ hasError: false, error: null })}
+            className="font-mono uppercase text-xs"
+          >
+            Retry Section
+          </Button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 type AdminTabId = "overview" | "providers" | "routing" | "users" | "settings" | "audit";
 
@@ -352,7 +403,9 @@ export default function AdminPage({ onBackHome, onOpenAuth }: AdminPageProps) {
         </div>
 
         {/* Recharts Key Metrics Dashboard Section */}
-        <AdminDashboardSection onNavigateTab={(tab) => setActiveTab(tab)} />
+        <AdminErrorBoundary fallbackTitle="Dashboard Metrics Error">
+          <AdminDashboardSection onNavigateTab={(tab) => setActiveTab(tab)} />
+        </AdminErrorBoundary>
 
         {/* Navigation Tab Bar */}
         <div className="flex overflow-x-auto border-b border-edge bg-background px-2 sm:px-4">
@@ -380,12 +433,14 @@ export default function AdminPage({ onBackHome, onOpenAuth }: AdminPageProps) {
 
         {/* Tab Panel */}
         <div className="p-3 sm:p-5 bg-background">
-          {activeTab === "overview" && <AdminOverviewTab />}
-          {activeTab === "providers" && <AdminProvidersTab />}
-          {activeTab === "routing" && <AdminRoutingTab />}
-          {activeTab === "users" && <AdminUsersTab />}
-          {activeTab === "settings" && <AdminSettingsTab />}
-          {activeTab === "audit" && <AdminAuditTab />}
+          <AdminErrorBoundary fallbackTitle="Admin Tab Error">
+            {activeTab === "overview" && <AdminOverviewTab />}
+            {activeTab === "providers" && <AdminProvidersTab />}
+            {activeTab === "routing" && <AdminRoutingTab />}
+            {activeTab === "users" && <AdminUsersTab />}
+            {activeTab === "settings" && <AdminSettingsTab />}
+            {activeTab === "audit" && <AdminAuditTab />}
+          </AdminErrorBoundary>
         </div>
       </div>
     </main>

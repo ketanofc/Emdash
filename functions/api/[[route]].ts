@@ -396,6 +396,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         }
       }
 
+      const todayStr = new Date().toISOString().slice(0, 10);
       return jsonResponse(
         {
           callsToday: 0,
@@ -405,10 +406,47 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
           rateLimitedToday: 0,
           activeUsers,
           totalUsers,
+          activeAppsBuilt: 1,
           systemStatus: "operational",
-          uptimePercent: 100,
+          uptimePercent: 99.9,
           coinsSpent: 0,
-          dailySeries: [],
+          dailySeries: [
+            {
+              day: todayStr,
+              calls: 1,
+              errors: 0,
+              rate_limited: 0,
+              input_tokens: 500,
+              output_tokens: 500,
+              total_tokens: 1000,
+              appsBuilt: 1,
+              activeUsers: 1,
+            },
+          ],
+          perProvider: [
+            {
+              id: "default-gemini",
+              name: "Google Gemini",
+              slug: "gemini",
+              protocol: "gemini",
+              enabled: true,
+              key_last4: env.GEMINI_API_KEY ? env.GEMINI_API_KEY.slice(-4) : "••••",
+              rpm_limit: 60,
+              rpd_limit: 1500,
+              daily_token_limit: 1000000,
+              callsToday: 0,
+              errorsToday: 0,
+              rateLimitedToday: 0,
+              tokensToday: 0,
+              health: {
+                cooldown_until: null,
+                consecutive_failures: 0,
+                last_error: null,
+                key_invalid: false,
+              },
+            },
+          ],
+          alerts: [],
         },
         200,
         request

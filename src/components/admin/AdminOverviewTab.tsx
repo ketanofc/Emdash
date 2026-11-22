@@ -82,9 +82,9 @@ export function AdminOverviewTab() {
       )}
 
       {/* Alerts strip */}
-      {data && data.alerts.length > 0 && (
+      {data && (data.alerts ?? []).length > 0 && (
         <div className="border border-edge bg-card divide-y divide-edge">
-          {data.alerts.map((alert, i) => (
+          {(data.alerts ?? []).map((alert, i) => (
             <div
               key={`${alert.providerId ?? "sys"}-${i}`}
               className={cn(
@@ -257,13 +257,13 @@ export function AdminOverviewTab() {
         <div className="font-mono uppercase text-xs text-foreground">
           Provider Usage Today vs Daily Limits
         </div>
-        {!data || data.perProvider.length === 0 ? (
+        {!data || (data.perProvider ?? []).length === 0 ? (
           <div className="text-xs text-muted-foreground font-mono">
             No providers configured yet. Add one in the Providers tab.
           </div>
         ) : (
           <div className="space-y-3">
-            {data.perProvider.map((p) => {
+            {(data.perProvider ?? []).map((p) => {
               const rpdRatio = p.rpd_limit ? Math.min(1, p.callsToday / p.rpd_limit) : 0;
               const tokRatio = p.daily_token_limit
                 ? Math.min(1, p.tokensToday / p.daily_token_limit)

@@ -107,16 +107,19 @@ export function AdminDashboardSection({ className, onNavigateTab }: AdminDashboa
       ];
 
   // System Health Distribution for Donut Chart
-  const healthyProviders = data?.perProvider.filter(
-    (p) => p.enabled && !p.health?.key_invalid && !(p.health?.cooldown_until && Date.parse(p.health.cooldown_until) > Date.now())
-  ).length ?? 0;
-  const cooldownProviders = data?.perProvider.filter(
-    (p) => Boolean(p.health?.cooldown_until && Date.parse(p.health.cooldown_until) > Date.now())
-  ).length ?? 0;
-  const errorProviders = data?.perProvider.filter((p) => p.health?.key_invalid).length ?? 0;
-  const disabledProviders = data?.perProvider.filter((p) => !p.enabled).length ?? 0;
+  const perProvider = data?.perProvider ?? [];
+  const alerts = data?.alerts ?? [];
 
-  const totalProviders = data?.perProvider.length ?? 0;
+  const healthyProviders = perProvider.filter(
+    (p) => p.enabled && !p.health?.key_invalid && !(p.health?.cooldown_until && Date.parse(p.health.cooldown_until) > Date.now())
+  ).length;
+  const cooldownProviders = perProvider.filter(
+    (p) => Boolean(p.health?.cooldown_until && Date.parse(p.health.cooldown_until) > Date.now())
+  ).length;
+  const errorProviders = perProvider.filter((p) => p.health?.key_invalid).length;
+  const disabledProviders = perProvider.filter((p) => !p.enabled).length;
+
+  const totalProviders = perProvider.length;
   const healthPieData = totalProviders > 0
     ? [
         { name: "Healthy", value: healthyProviders || 1, color: "#10b981" },
@@ -130,7 +133,7 @@ export function AdminDashboardSection({ className, onNavigateTab }: AdminDashboa
 
   const totalUsersCount = data?.totalUsers ?? Math.max(1, data?.activeUsers ?? 1);
   const activeAppsBuiltCount = data?.activeAppsBuilt ?? Math.max(1, rawSeries.reduce((s, d) => s + (d.appsBuilt ?? 0), 0) || (data?.callsToday ?? 0));
-  const systemStatus = data?.systemStatus ?? (data?.alerts.some((a) => a.level === "error") ? "degraded" : "operational");
+  const systemStatus = data?.systemStatus ?? (alerts.some((a) => a.level === "error") ? "degraded" : "operational");
   const uptimePercent = data?.uptimePercent ?? 99.9;
 
   return (
@@ -357,9 +360,9 @@ export function AdminDashboardSection({ className, onNavigateTab }: AdminDashboa
             <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5 line-clamp-1">
               <CheckCircle2 className="size-3 text-emerald-500 shrink-0" />
               <span>
-                {data?.alerts.length === 0
+                {alerts.length === 0
                   ? "All LLM routers & edge endpoints nominal"
-                  : `${data?.alerts.length} alert(s) monitored`}
+                  : `${alerts.length} alert(s) monitored`}
               </span>
             </p>
           </div>
