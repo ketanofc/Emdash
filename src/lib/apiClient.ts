@@ -81,41 +81,39 @@ export async function fetchAuthState(): Promise<AuthMeState> {
   if (client) {
     const { data: sessionData } = await client.auth.getSession();
     const session = sessionData.session;
-    if (!session?.user) {
-      return { aal: "aal1", mfaEnrolled: false, user: null };
+    if (session?.user) {
+      const [profileRes, aalRes, factorsRes] = await Promise.all([
+        client
+          .from("profiles")
+          .select("user_id, email, role, status")
+          .eq("user_id", session.user.id)
+          .maybeSingle()
+          .then((res) => res, () => ({ data: null })),
+        client.auth.mfa
+          .getAuthenticatorAssuranceLevel()
+          .then((res) => res, () => ({ data: null })),
+        client.auth.mfa
+          .listFactors()
+          .then((res) => res, () => ({ data: null })),
+      ]);
+
+      const profile = profileRes.data;
+      const verifiedTotp = (factorsRes.data?.totp ?? []).some((f) => f.status === "verified");
+      return {
+        aal: aalRes.data?.currentLevel === "aal2" ? "aal2" : "aal1",
+        mfaEnrolled: verifiedTotp,
+        user: {
+          id: session.user.id,
+          email: profile?.email || session.user.email || "",
+          name:
+            (session.user.user_metadata?.name as string | undefined) ||
+            (session.user.email || "Builder").split("@")[0],
+          plan: "free",
+          role: profile?.role === "admin" ? "admin" : "user",
+          status: profile?.status === "suspended" ? "suspended" : "active",
+        },
+      };
     }
-
-    const [profileRes, aalRes, factorsRes] = await Promise.all([
-      client
-        .from("profiles")
-        .select("user_id, email, role, status")
-        .eq("user_id", session.user.id)
-        .maybeSingle()
-        .then((res) => res, () => ({ data: null })),
-      client.auth.mfa
-        .getAuthenticatorAssuranceLevel()
-        .then((res) => res, () => ({ data: null })),
-      client.auth.mfa
-        .listFactors()
-        .then((res) => res, () => ({ data: null })),
-    ]);
-
-    const profile = profileRes.data;
-    const verifiedTotp = (factorsRes.data?.totp ?? []).some((f) => f.status === "verified");
-    return {
-      aal: aalRes.data?.currentLevel === "aal2" ? "aal2" : "aal1",
-      mfaEnrolled: verifiedTotp,
-      user: {
-        id: session.user.id,
-        email: profile?.email || session.user.email || "",
-        name:
-          (session.user.user_metadata?.name as string | undefined) ||
-          (session.user.email || "Builder").split("@")[0],
-        plan: "free",
-        role: profile?.role === "admin" ? "admin" : "user",
-        status: profile?.status === "suspended" ? "suspended" : "active",
-      },
-    };
   }
 
   const localToken = getLocalSessionToken();
@@ -181,7 +179,24 @@ export async function signInAccount(params: {
         email: params.email,
         password: params.password || "",
       });
-      if (error || !data.user) throw new Error(error?.message || "Sign in failed.");
+      if (error || !data.user) {
+        // Fallback to server /api/auth/session for configured admin accounts or local auth
+        try {
+          const res = await apiFetch<{ token: string; user: UserSession }>("/api/auth/session", {
+            method: "POST",
+            body: JSON.stringify({
+              email: params.email,
+              name: params.name,
+              password: params.password,
+              mode: params.mode,
+            }),
+          });
+          setLocalSessionToken(res.token);
+          return { status: "signed_in", user: res.user };
+        } catch {
+          throw new Error(error?.message || "Sign in failed.");
+        }
+      }
       authedUser = data.user;
       hasSession = Boolean(data.session);
     }

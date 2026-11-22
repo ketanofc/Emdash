@@ -83,6 +83,9 @@ function decodeJwtAal(token: string): "aal1" | "aal2" {
 }
 
 export function getSupabaseAdmin() {
+  if (process.env.NODE_ENV === "test" || process.env.VITEST) {
+    return null;
+  }
   const supabaseUrl = (
     process.env.VITE_SUPABASE_URL ||
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
