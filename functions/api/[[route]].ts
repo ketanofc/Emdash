@@ -129,9 +129,7 @@ function getSigningSecret(env: Env): string {
   ).trim();
 }
 
-export const onRequest: PagesFunction<Env> = async (context) => {
-  const { request, env } = context;
-
+export async function handleApiRequest(request: Request, env: Env): Promise<Response> {
   // 1. Handle CORS Preflight
   if (request.method === "OPTIONS") {
     return new Response(null, {
@@ -583,4 +581,18 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   // 12. Fallback for unhandled /api/*
   return errorResponse(`API endpoint not found: ${path}`, 404, request);
+}
+
+export const onRequest: PagesFunction<Env> = async (context) => {
+  return handleApiRequest(context.request, context.env);
+};
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url);
+    if (url.pathname.startsWith("/api")) {
+      return handleApiRequest(request, env);
+    }
+    return new Response("Not found", { status: 404 });
+  },
 };
