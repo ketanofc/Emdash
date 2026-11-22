@@ -217,7 +217,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
           userId: "admin-master",
           email: adminEmail,
           role: "admin",
-          aal: "aal1",
+          aal: "aal2",
           exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
         },
         signingSecret
@@ -226,7 +226,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       return jsonResponse(
         {
           token: tokenStr,
-          aal: "aal1",
+          aal: "aal2",
           user: {
             id: "admin-master",
             email: adminEmail,

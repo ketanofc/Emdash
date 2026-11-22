@@ -265,13 +265,22 @@ export async function signInWithGoogleOAuth(redirectPath = "/"): Promise<void> {
   const redirectTo = origin ? `${origin}${redirectPath}` : undefined;
   const { data, error } = await client.auth.signInWithOAuth({
     provider: "google",
-    options: redirectTo ? { redirectTo } : undefined,
+    options: {
+      redirectTo,
+      queryParams: {
+        access_type: "offline",
+        prompt: "consent",
+      },
+    },
   });
   if (error) {
     throw new Error(error.message || "Could not start Google authentication.");
   }
   if (!data?.url) {
     throw new Error("Google OAuth redirect URL was not returned.");
+  }
+  if (typeof window !== "undefined" && data.url) {
+    window.location.assign(data.url);
   }
 }
 

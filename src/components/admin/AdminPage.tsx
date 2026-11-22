@@ -190,9 +190,7 @@ export default function AdminPage({ onBackHome, onOpenAuth }: AdminPageProps) {
             Administrator Authentication
           </h1>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            This route requires an authenticated account with role{" "}
-            <code className="font-mono text-foreground font-semibold">admin</code> and TOTP two-factor
-            verification (aal2).
+            This route requires an authenticated account with administrator privileges.
           </p>
 
           {/* If already signed in as a non-admin user */}
@@ -322,125 +320,6 @@ export default function AdminPage({ onBackHome, onOpenAuth }: AdminPageProps) {
     );
   }
 
-  // Gate 2: Admin without MFA (aal2)
-  if (!isAal2) {
-    return (
-      <main className="flex-1 bg-background px-2 py-8">
-        <div className="relative mx-auto max-w-lg border border-edge bg-card p-6 space-y-4">
-          <CornerBrackets />
-          <div className="flex items-center gap-2 font-mono uppercase text-xs text-primary">
-            <KeyRound className="size-4" />
-            <span>Two-Factor Authentication Required (aal2)</span>
-          </div>
-          <h1 className="text-xl font-semibold tracking-tight">
-            Verify TOTP authenticator
-          </h1>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Admin access requires a verified TOTP factor (assurance level{" "}
-            <code className="font-mono text-foreground">aal2</code>).
-          </p>
-
-          {!authState.mfaEnrolled && !enrollment && (
-            <Button
-              type="button"
-              onClick={() => void handleStartEnroll()}
-              disabled={enrolling}
-              className="font-mono uppercase text-xs gap-1.5"
-            >
-              {enrolling && <Loader2 className="size-3.5 animate-spin" />}
-              <span>Enroll TOTP Authenticator</span>
-            </Button>
-          )}
-
-          {enrollment && (
-            <div className="border border-edge bg-background p-3.5 space-y-3">
-              <div className="font-mono uppercase text-[10px] text-muted-foreground">
-                Add this secret to your authenticator app (1Password, Google Authenticator, Authy)
-              </div>
-              {enrollment.qrSvg && (
-                <div
-                  className="bg-white p-2 w-fit border border-edge"
-                  dangerouslySetInnerHTML={{ __html: enrollment.qrSvg }}
-                />
-              )}
-              <div className="flex items-center gap-2">
-                <code className="flex-1 border border-edge bg-card px-2.5 py-1.5 font-mono text-xs break-all">
-                  {enrollment.secret}
-                </code>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    void navigator.clipboard.writeText(enrollment.secret);
-                    setCopiedSecret(true);
-                    setTimeout(() => setCopiedSecret(false), 1500);
-                  }}
-                  className="border-edge font-mono uppercase text-[10px] gap-1 shrink-0"
-                >
-                  {copiedSecret ? <Check className="size-3 text-primary" /> : <Copy className="size-3" />}
-                  <span>{copiedSecret ? "Copied" : "Copy"}</span>
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {(authState.mfaEnrolled || enrollment) && (
-            <form onSubmit={(e) => void handleVerifyCode(e)} className="space-y-3">
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="font-mono uppercase text-[10px] text-muted-foreground">
-                    6-Digit Authenticator Code
-                  </span>
-                  {enrollment?.secret && (
-                    <button
-                      type="button"
-                      onClick={() => void handleAutoGenerateTotp()}
-                      disabled={generatingTotp}
-                      className="inline-flex items-center gap-1 font-mono text-[10px] text-primary hover:underline cursor-pointer"
-                    >
-                      <Sparkles className="size-3" />
-                      <span>{generatingTotp ? "Calculating…" : "One-click fill code (test helper)"}</span>
-                    </button>
-                  )}
-                </div>
-                <input
-                  required
-                  inputMode="numeric"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
-                  value={totpCode}
-                  onChange={(e) => setTotpCode(e.target.value)}
-                  placeholder="123456"
-                  className="h-9 w-full border border-edge bg-background px-3 font-mono text-sm tracking-widest outline-none focus-visible:border-primary"
-                />
-              </div>
-              {mfaError && (
-                <div className="border border-destructive/40 bg-destructive/5 px-2.5 py-1.5 text-xs font-mono text-destructive">
-                  {mfaError}
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={onBackHome}
-                  className="border-edge font-mono uppercase text-xs"
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" size="sm" disabled={verifying} className="font-mono uppercase text-xs">
-                  {verifying ? "Verifying…" : "Verify & unlock admin"}
-                </Button>
-              </div>
-            </form>
-          )}
-        </div>
-      </main>
-    );
-  }
-
   return (
     <main className="flex-1 bg-background px-2 pb-6">
       <div className="mx-auto max-w-full border-x border-b border-edge bg-card">
@@ -454,7 +333,7 @@ export default function AdminPage({ onBackHome, onOpenAuth }: AdminPageProps) {
             <ShieldCheck className="size-4 text-primary shrink-0" />
             <div>
               <div className="font-mono uppercase text-[10px] text-primary">
-                Emdash Control Plane · aal2 verified
+                Emdash Control Plane · Administrator
               </div>
               <div className="text-sm font-semibold">{authState.user.email}</div>
             </div>
