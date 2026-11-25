@@ -596,6 +596,53 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
   // 11. Real Edge Pipeline Execution for /api/gemini/pipeline, /api/repair, /api/generate
   if ((path === "/api/gemini/pipeline" || path === "/api/repair" || path === "/api/generate") && method === "POST") {
     const isRepairRoute = path === "/api/repair";
+    const supabaseAdmin = getSupabaseAdmin(env);
+
+    // Require valid authenticated user (HMAC local token or Supabase JWT)
+    if (!token) {
+      return jsonResponse(
+        { code: "AUTH_REQUIRED", error: "Please sign in or sign up to build." },
+        401,
+        request
+      );
+    }
+    let authedUserId: string | null = null;
+    const localVerified = await verifyToken(token, signingSecret);
+    if (localVerified) {
+      authedUserId = localVerified.userId;
+    } else if (supabaseAdmin) {
+      try {
+        const { data: userData } = await supabaseAdmin.auth.getUser(token);
+        if (userData?.user) authedUserId = userData.user.id;
+      } catch {
+        // fallback to REST check
+      }
+    }
+    if (!authedUserId) {
+      const sbUrl = (env.VITE_SUPABASE_URL || env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
+      const sbKey = (env.SUPABASE_SERVICE_ROLE_KEY || env.VITE_SUPABASE_ANON_KEY || "").trim();
+      if (sbUrl && sbKey) {
+        try {
+          const uRes = await fetch(`${sbUrl}/auth/v1/user`, {
+            headers: { apikey: sbKey, Authorization: `Bearer ${token}` },
+          });
+          if (uRes.ok) {
+            const uJson = (await uRes.json()) as { id?: string };
+            if (uJson.id) authedUserId = uJson.id;
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+    if (!authedUserId) {
+      return jsonResponse(
+        { code: "AUTH_REQUIRED", error: "Invalid or expired session. Please sign in again." },
+        401,
+        request
+      );
+    }
+
     let body: {
       prompt?: string;
       model?: string;
@@ -616,7 +663,6 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     }
 
     // Resolve active LLM provider: 1) Supabase providers table, 2) Cloudflare Env Secrets
-    const supabaseAdmin = getSupabaseAdmin(env);
     let activeProvider: {
       protocol: "gemini" | "openai";
       baseUrl: string;
@@ -712,34 +758,27 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       );
     }
 
-    // Optional Dash Coin deduction for authenticated Supabase users
-    let authedUserId: string | null = null;
+    // Dash Coin deduction for authenticated Supabase users (only after provider is verified)
     let walletBalance: number | undefined;
     const coinCost = isRepairRoute ? 0 : 10;
     const jobId = crypto.randomUUID();
 
-    if (token && supabaseAdmin) {
+    if (authedUserId && supabaseAdmin && coinCost > 0) {
       try {
-        const { data: userData } = await supabaseAdmin.auth.getUser(token);
-        if (userData?.user) {
-          authedUserId = userData.user.id;
-          if (coinCost > 0) {
-            const { data: newBal, error: rpcErr } = await supabaseAdmin.rpc("spend_coins", {
-              p_user_id: authedUserId,
-              p_amount: coinCost,
-              p_reason: isRepairRoute ? "repair_job" : "build_job",
-              p_job_id: jobId,
-            });
-            if (rpcErr) {
-              return jsonResponse(
-                { code: "INSUFFICIENT_COINS", error: "Insufficient Dash Coins for this build." },
-                402,
-                request
-              );
-            }
-            if (typeof newBal === "number") walletBalance = newBal;
-          }
+        const { data: newBal, error: rpcErr } = await supabaseAdmin.rpc("spend_coins", {
+          p_user_id: authedUserId,
+          p_amount: coinCost,
+          p_reason: isRepairRoute ? "repair_job" : "build_job",
+          p_job_id: jobId,
+        });
+        if (rpcErr) {
+          return jsonResponse(
+            { code: "INSUFFICIENT_COINS", error: "Insufficient Dash Coins for this build." },
+            402,
+            request
+          );
         }
+        if (typeof newBal === "number") walletBalance = newBal;
       } catch {
         // continue without wallet deduction if token is local/anonymous
       }

@@ -25,6 +25,11 @@ import {
 import { fetchAuthState, fetchWalletSummary } from "@/src/lib/apiClient";
 import { getSupabaseClient, hydrateSupabaseConfig } from "@/src/lib/supabase";
 import {
+  clearPendingPrompt,
+  loadPendingPrompt,
+  savePendingPrompt,
+} from "@/src/lib/pendingPrompt";
+import {
   clearVersionsFromDb,
   loadVersionsFromDb,
   saveVersionToDb,
@@ -204,6 +209,7 @@ export default function App() {
   const [walletOpen, setWalletOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
+  const [authPromptNotice, setAuthPromptNotice] = useState(false);
   const [docsOpen, setDocsOpen] = useState(false);
   const [docsSection, setDocsSection] = useState<DocSection>("quickstart");
 
@@ -215,6 +221,18 @@ export default function App() {
     try {
       const auth = await fetchAuthState();
       setUser(auth.user);
+      if (auth.user) {
+        const pending = loadPendingPrompt();
+        if (pending) {
+          if (pending.source === "home") {
+            setHomePrompt(pending.prompt);
+            clearPendingPrompt();
+            setMode("home");
+          } else if (pending.source === "web") {
+            setMode("web");
+          }
+        }
+      }
     } catch {
       setUser(null);
     } finally {
@@ -623,6 +641,18 @@ export default function App() {
 
   const handleStartFromHome = useCallback(
     async (promptText: string, attachments: AttachedFile[]) => {
+      if (!user) {
+        savePendingPrompt({
+          prompt: promptText,
+          source: "home",
+          timestamp: Date.now(),
+        });
+        setHomePrompt(promptText);
+        setAuthPromptNotice(true);
+        setAuthOpen(true);
+        return;
+      }
+      clearPendingPrompt();
       setHomePrompt("");
       setSelectedVersion(1);
       await executePipelineRun({
@@ -632,7 +662,7 @@ export default function App() {
         isFreshBuild: true,
       });
     },
-    [executePipelineRun]
+    [executePipelineRun, user]
   );
 
   const handleFollowUp = useCallback(
@@ -831,6 +861,11 @@ export default function App() {
           isDark={isDark}
           onToggleTheme={handleToggleTheme}
           onGoHome={handleGoHome}
+          user={user}
+          onRequireAuth={() => {
+            setAuthPromptNotice(true);
+            setAuthOpen(true);
+          }}
         />
       ) : mode === "sponsorship" ? (
         <>
@@ -927,10 +962,19 @@ export default function App() {
 
       <AuthDialog
         open={authOpen}
-        onOpenChange={setAuthOpen}
+        onOpenChange={(nextOpen) => {
+          setAuthOpen(nextOpen);
+          if (!nextOpen) setAuthPromptNotice(false);
+        }}
         user={user}
-        onSignIn={handleSignIn}
+        onSignIn={(session) => {
+          setAuthPromptNotice(false);
+          clearPendingPrompt();
+          handleSignIn(session);
+        }}
         onSignOut={handleSignOut}
+        initialMode={authPromptNotice ? "signup" : "signin"}
+        promptSavedNotice={authPromptNotice}
       />
 
       <SupportDocsDialog

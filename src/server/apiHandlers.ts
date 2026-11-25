@@ -255,28 +255,23 @@ export function createPublicApiRouter(ctx: ServerContext): express.Router {
     res: express.Response,
     isRepairRoute: boolean
   ) => {
-    const authHeader = req.headers.authorization || "";
-    let userId: string | null = null;
-    let country: string | null =
-      typeof req.headers["cf-ipcountry"] === "string"
+    const auth = await resolveAuthenticatedUser(req, ctx);
+    if (!auth.ok) {
+      res.status(auth.status).json({ code: "AUTH_REQUIRED", error: auth.error });
+      return;
+    }
+    if (auth.profile.status === "suspended") {
+      res.status(403).json({ code: "SUSPENDED", error: "Your account is suspended." });
+      return;
+    }
+    const userId: string = auth.userId;
+    const country: string | null =
+      auth.country ||
+      (typeof req.headers["cf-ipcountry"] === "string"
         ? req.headers["cf-ipcountry"]
         : typeof req.headers["x-user-country"] === "string"
           ? req.headers["x-user-country"]
-          : null;
-
-    if (authHeader.startsWith("Bearer ")) {
-      const auth = await resolveAuthenticatedUser(req, ctx);
-      if (!auth.ok) {
-        res.status(auth.status).json({ error: auth.error });
-        return;
-      }
-      if (auth.profile.status === "suspended") {
-        res.status(403).json({ code: "SUSPENDED", error: "Your account is suspended." });
-        return;
-      }
-      userId = auth.userId;
-      country = auth.country || country;
-    }
+          : null);
 
     const body = (req.body || {}) as {
       prompt?: string;
@@ -481,6 +476,16 @@ export function createPublicApiRouter(ctx: ServerContext): express.Router {
   router.post("/repair", (req, res) => void handlePipelineEndpoint(req, res, true));
 
   router.post("/web-agent/chat", async (req, res) => {
+    const auth = await resolveAuthenticatedUser(req, ctx);
+    if (!auth.ok) {
+      res.status(auth.status).json({ code: "AUTH_REQUIRED", error: auth.error });
+      return;
+    }
+    if (auth.profile.status === "suspended") {
+      res.status(403).json({ code: "SUSPENDED", error: "Your account is suspended." });
+      return;
+    }
+
     const body = (req.body || {}) as {
       provider?: string;
       apiKey?: string;

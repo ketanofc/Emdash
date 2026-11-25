@@ -581,8 +581,13 @@ export async function handleEdgeGitHubAndAgent(params: {
     }
   }
 
-  // 7. POST /api/web-agent/chat (with optional real GitHub repo context)
+  // 7. POST /api/web-agent/chat (requires authenticated user; optional GitHub repo context)
   if (path === "/api/web-agent/chat" && method === "POST") {
+    const auth = await resolveEdgeUser(request, env, supabaseAdmin, verifyLocalToken);
+    if (!auth.ok) {
+      return jsonResponse({ code: "AUTH_REQUIRED", error: auth.error }, auth.status, request);
+    }
+
     let body: {
       provider?: string;
       apiKey?: string;

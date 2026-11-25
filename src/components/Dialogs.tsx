@@ -81,6 +81,8 @@ interface AuthDialogProps {
   user: UserSession | null;
   onSignIn: (session: UserSession) => void;
   onSignOut: () => void;
+  initialMode?: "signin" | "signup";
+  promptSavedNotice?: boolean;
 }
 
 export function AuthDialog({
@@ -89,8 +91,10 @@ export function AuthDialog({
   user,
   onSignIn,
   onSignOut,
+  initialMode = "signin",
+  promptSavedNotice = false,
 }: AuthDialogProps) {
-  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+  const [authMode, setAuthMode] = useState<"signin" | "signup">(initialMode);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -99,10 +103,13 @@ export function AuthDialog({
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (open && !isSupabaseConfigured()) {
-      void hydrateSupabaseConfig();
+    if (open) {
+      setAuthMode(initialMode);
+      if (!isSupabaseConfigured()) {
+        void hydrateSupabaseConfig();
+      }
     }
-  }, [open]);
+  }, [open, initialMode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -196,6 +203,12 @@ export function AuthDialog({
               </DialogDescription>
             </DialogHeader>
 
+            {promptSavedNotice && (
+              <div className="border border-primary/40 bg-primary/5 px-3 py-2 font-mono text-[11px] text-foreground">
+                Your prompt is saved safely — sign up or sign in to build it right away.
+              </div>
+            )}
+
             <div className="grid grid-cols-2 border border-edge bg-background p-1 gap-1">
               <button
                 type="button"
@@ -240,7 +253,9 @@ export function AuthDialog({
                     if (!isSupabaseConfigured()) {
                       await hydrateSupabaseConfig();
                     }
-                    await signInWithGoogleOAuth("/");
+                    const returnPath =
+                      typeof window !== "undefined" ? window.location.pathname || "/" : "/";
+                    await signInWithGoogleOAuth(returnPath);
                   } catch (err) {
                     setFormError(
                       err instanceof Error ? err.message : "Could not connect to Google sign-in."

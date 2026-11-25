@@ -201,5 +201,27 @@ describe("GitHub Backend Security & Authorization", () => {
       headers: { Authorization: `Bearer ${signB.token}` },
     });
     expect(suspendedDash.status).toBe(403);
+
+    // 8. Unauthenticated build & web-agent calls are blocked with 401
+    const unauthGen = await fetch(`${baseUrl}/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: "Build a SaaS landing page" }),
+    });
+    expect(unauthGen.status).toBe(401);
+
+    const unauthPipeline = await fetch(`${baseUrl}/api/gemini/pipeline`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: "Build a SaaS landing page" }),
+    });
+    expect(unauthPipeline.status).toBe(401);
+
+    const unauthWebAgent = await fetch(`${baseUrl}/api/web-agent/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: "Add dark mode" }),
+    });
+    expect(unauthWebAgent.status).toBe(401);
   });
 });

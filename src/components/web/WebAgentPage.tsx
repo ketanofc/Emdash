@@ -61,13 +61,21 @@ import type {
   GitHubRepo,
   GitHubTreeEntry,
 } from "@/src/lib/github/types";
+import {
+  clearPendingPrompt,
+  loadPendingPrompt,
+  savePendingPrompt,
+} from "@/src/lib/pendingPrompt";
 import { getAuthHeaders } from "@/src/lib/supabase";
+import type { UserSession } from "@/src/types";
 import { cn } from "@/src/lib/utils";
 
 interface WebAgentPageProps {
   isDark: boolean;
   onToggleTheme: (e?: React.MouseEvent<HTMLButtonElement>) => void;
   onGoHome: () => void;
+  user?: UserSession | null;
+  onRequireAuth?: () => void;
 }
 
 export type WebAgentState = "signed-out" | "connected-empty" | "agent-running" | "done";
@@ -142,6 +150,8 @@ export function WebAgentPage({
   isDark,
   onToggleTheme,
   onGoHome,
+  user = null,
+  onRequireAuth,
 }: WebAgentPageProps) {
   const [agentState, setAgentState] = useState<WebAgentState>("signed-out");
   const [sidebarOpen] = useState<boolean>(true);
@@ -309,6 +319,18 @@ export function WebAgentPage({
     }
     void loadGitHubConnection();
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    const pending = loadPendingPrompt();
+    if (pending && pending.source === "web") {
+      setPromptInput(pending.prompt);
+      if (pending.mode) setAgentMode(pending.mode);
+      clearPendingPrompt();
+      window.setTimeout(() => composerRef.current?.focus(), 60);
+    }
+    void loadGitHubConnection();
+  }, [user?.id, user?.email]);
 
   useEffect(() => {
     if (!mobileDrawerOpen && !settingsOpen && !repoModalOpen && !prModalOpen) return;
@@ -729,6 +751,26 @@ export function WebAgentPage({
     if (!text && attachedNames.length === 0) return;
 
     const cleanPrompt = text || `Review attached context (${attachedNames.join(", ")})`;
+    if (!user) {
+      savePendingPrompt({
+        prompt: cleanPrompt,
+        source: "web",
+        mode: agentMode,
+        timestamp: Date.now(),
+      });
+      setPromptInput(cleanPrompt);
+      if (onRequireAuth) {
+        onRequireAuth();
+      } else {
+        setGithubNotice({
+          kind: "error",
+          text: "Please sign up or sign in to run the AI Web Agent. Your prompt has been saved.",
+        });
+      }
+      return;
+    }
+
+    clearPendingPrompt();
     const shortTitle =
       cleanPrompt.length > 34 ? `${cleanPrompt.slice(0, 34).trim()}…` : cleanPrompt;
     const targetTabId = currentTab.id;
