@@ -79,6 +79,9 @@ export function setLocalSessionToken(token: string | null): void {
 }
 
 export async function getAuthHeaders(): Promise<Record<string, string>> {
+  if (!isSupabaseConfigured()) {
+    await hydrateSupabaseConfig();
+  }
   const client = getSupabaseClient();
   if (client) {
     const { data } = await client.auth.getSession();

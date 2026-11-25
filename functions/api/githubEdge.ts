@@ -33,6 +33,11 @@ export interface EdgeGitHubEnv {
   GITHUB_REDIRECT_URI?: string;
   KEY_ENCRYPTION_SECRET?: string;
   SESSION_SIGNING_SECRET?: string;
+  VITE_SUPABASE_URL?: string;
+  SUPABASE_URL?: string;
+  VITE_SUPABASE_ANON_KEY?: string;
+  VITE_SUPABASE_PUBLISHABLE_KEY?: string;
+  SUPABASE_ANON_KEY?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
   SUPABASE_SECRET_KEY?: string;
   APP_URL?: string;
@@ -86,6 +91,7 @@ async function resolveMasterKeyBase64(env: EdgeGitHubEnv, signingSecret: string)
 
 async function resolveEdgeUser(
   request: Request,
+  env: EdgeGitHubEnv,
   supabaseAdmin: SupabaseClient | null,
   verifyLocalToken: (token: string) => Promise<{ userId: string; email: string } | null>
 ): Promise<{ ok: true; userId: string; email: string } | { ok: false; status: number; error: string }> {
@@ -103,9 +109,38 @@ async function resolveEdgeUser(
         return { ok: true, userId: data.user.id, email: data.user.email || "" };
       }
     } catch {
+      // fallback to direct REST auth check
+    }
+  }
+
+  const sbUrl = (env.VITE_SUPABASE_URL || env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  const sbKey = (
+    env.SUPABASE_SERVICE_ROLE_KEY ||
+    env.SUPABASE_SECRET_KEY ||
+    env.VITE_SUPABASE_ANON_KEY ||
+    env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    env.SUPABASE_ANON_KEY ||
+    ""
+  ).trim();
+  if (sbUrl && sbKey) {
+    try {
+      const userRes = await fetch(`${sbUrl}/auth/v1/user`, {
+        headers: {
+          apikey: sbKey,
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (userRes.ok) {
+        const u = (await userRes.json()) as { id?: string; email?: string };
+        if (u.id) {
+          return { ok: true, userId: u.id, email: u.email || "" };
+        }
+      }
+    } catch {
       // ignore
     }
   }
+
   return { ok: false, status: 401, error: "Invalid or expired session." };
 }
 
@@ -163,7 +198,7 @@ export async function handleEdgeGitHubAndAgent(params: {
 
   // 1. GET /api/github/status
   if (path === "/api/github/status" && method === "GET") {
-    const auth = await resolveEdgeUser(request, supabaseAdmin, verifyLocalToken);
+    const auth = await resolveEdgeUser(request, env, supabaseAdmin, verifyLocalToken);
     if (!auth.ok || !supabaseAdmin) {
       return jsonResponse({ configured, connected: false, user: null }, 200, request);
     }
@@ -209,7 +244,7 @@ export async function handleEdgeGitHubAndAgent(params: {
         request
       );
     }
-    const auth = await resolveEdgeUser(request, supabaseAdmin, verifyLocalToken);
+    const auth = await resolveEdgeUser(request, env, supabaseAdmin, verifyLocalToken);
     if (!auth.ok) return errorResponse(auth.error, auth.status, request);
 
     let body: { returnTo?: string } = {};
@@ -311,7 +346,7 @@ export async function handleEdgeGitHubAndAgent(params: {
 
   // 4. POST /api/github/disconnect
   if (path === "/api/github/disconnect" && method === "POST") {
-    const auth = await resolveEdgeUser(request, supabaseAdmin, verifyLocalToken);
+    const auth = await resolveEdgeUser(request, env, supabaseAdmin, verifyLocalToken);
     if (!auth.ok) return errorResponse(auth.error, auth.status, request);
     if (supabaseAdmin) {
       await supabaseAdmin.from("github_connections").delete().eq("user_id", auth.userId);
@@ -323,7 +358,7 @@ export async function handleEdgeGitHubAndAgent(params: {
   const requireUserToken = async (): Promise<
     { ok: true; userId: string; token: string } | { ok: false; res: Response }
   > => {
-    const auth = await resolveEdgeUser(request, supabaseAdmin, verifyLocalToken);
+    const auth = await resolveEdgeUser(request, env, supabaseAdmin, verifyLocalToken);
     if (!auth.ok) {
       return { ok: false, res: errorResponse(auth.error, auth.status, request) };
     }

@@ -8,7 +8,10 @@
     "enabled": true
   },
   "vars": {
-    "GITHUB_CLIENT_ID": "Ov23liIkSWps7gsiI9qE"
+    "APP_URL": "https://emdash.world",
+    "GITHUB_CLIENT_ID": "Ov23liIkSWps7gsiI9qE",
+    "VITE_SUPABASE_URL": "https://gdsspbgijrbewihdotqi.supabase.co",
+    "VITE_SUPABASE_ANON_KEY": "sb_publishable_3TOekP8ADJzk8VPjq9Pz8A_rGSYX1DE"
   },
   "assets": {
     "directory": "./dist",
