@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
+  ExternalLink,
   Eye,
   EyeOff,
   FileCode2,
@@ -15,13 +16,15 @@ import {
   GitPullRequest,
   KeyRound,
   Loader2,
-  Menu,
+  LogOut,
   Monitor,
   Moon,
   PanelRightClose,
   PanelRightOpen,
   Paperclip,
   Plus,
+  RefreshCw,
+  Search,
   Settings,
   Smartphone,
   Square,
@@ -34,18 +37,31 @@ import {
 import { AnimatePresence, motion, MotionConfig } from "motion/react";
 import { CornerBrackets } from "@/src/components/CornerBrackets";
 import { Button } from "@/src/components/ui/button";
+import { GitHubRepoModal } from "@/src/components/web/GitHubRepoModal";
+import { GitHubPrModal } from "@/src/components/web/GitHubPrModal";
 import {
-  MOCK_CHATS,
-  MOCK_DIFFS,
-  MOCK_FILES,
-  MOCK_PROJECTS,
-  MOCK_TERMINAL_LOGS,
-  REPO_URL,
   STARTER_PROMPTS,
   WEB_MODELS,
   type WebChatSession,
-  type WebProject,
 } from "@/src/data/webMock";
+import {
+  disconnectGitHub,
+  fetchGitHubRepos,
+  fetchGitHubStatus,
+  fetchRepoFile,
+  fetchRepoTree,
+  GitHubClientError,
+  startGitHubOAuth,
+} from "@/src/lib/githubApiClient";
+import type {
+  GitHubConnectionStatus,
+  GitHubDiffFile,
+  GitHubFileOperation,
+  GitHubPullRequestResult,
+  GitHubRepo,
+  GitHubTreeEntry,
+} from "@/src/lib/github/types";
+import { getAuthHeaders } from "@/src/lib/supabase";
 import { cn } from "@/src/lib/utils";
 
 interface WebAgentPageProps {
@@ -132,8 +148,26 @@ export function WebAgentPage({
   const [inspectorOpen, setInspectorOpen] = useState<boolean>(true);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState<boolean>(false);
 
-  const [projects] = useState<WebProject[]>(MOCK_PROJECTS);
-  const [chats, setChats] = useState<WebChatSession[]>(MOCK_CHATS);
+  const [githubStatus, setGithubStatus] = useState<GitHubConnectionStatus>({
+    configured: true,
+    connected: false,
+    user: null,
+  });
+  const [githubLoading, setGithubLoading] = useState<boolean>(false);
+  const [githubNotice, setGithubNotice] = useState<{ kind: "info" | "error"; text: string } | null>(null);
+  const [repos, setRepos] = useState<GitHubRepo[]>([]);
+  const [loadingRepos, setLoadingRepos] = useState<boolean>(false);
+  const [repoError, setRepoError] = useState<string | null>(null);
+  const [repoModalOpen, setRepoModalOpen] = useState<boolean>(false);
+  const [prModalOpen, setPrModalOpen] = useState<boolean>(false);
+
+  const [repoTreeByKey, setRepoTreeByKey] = useState<Record<string, GitHubTreeEntry[]>>({});
+  const [loadingTree, setLoadingTree] = useState<boolean>(false);
+  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
+  const [selectedFileContent, setSelectedFileContent] = useState<string>("");
+  const [loadingFile, setLoadingFile] = useState<boolean>(false);
+
+  const [chats, setChats] = useState<WebChatSession[]>([]);
   const [tabs, setTabs] = useState<BrowserTab[]>(INITIAL_TABS);
   const [activeTabId, setActiveTabId] = useState<string>(INITIAL_TABS[0].id);
 
@@ -141,8 +175,14 @@ export function WebAgentPage({
   const [mobileTab, setMobileTab] = useState<MobileTab>("chat");
   const [previewViewport, setPreviewViewport] = useState<PreviewViewport>("desktop");
 
-  const [selectedFileIndex, setSelectedFileIndex] = useState<number>(0);
   const [expandedDiffs, setExpandedDiffs] = useState<Record<string, boolean>>({});
+  const [diffsByTab, setDiffsByTab] = useState<Record<string, GitHubDiffFile[]>>({});
+  const [operationsByTab, setOperationsByTab] = useState<Record<string, GitHubFileOperation[]>>({});
+  const [prMetaByTab, setPrMetaByTab] = useState<
+    Record<string, { branch: string; commitMessage: string; prTitle: string; prBody: string }>
+  >({});
+  const [prResultByTab, setPrResultByTab] = useState<Record<string, GitHubPullRequestResult>>({});
+  const [terminalLogsByTab, setTerminalLogsByTab] = useState<Record<string, string[]>>({});
 
   const [promptInput, setPromptInput] = useState<string>("");
   const [attachedNames, setAttachedNames] = useState<string[]>([]);
@@ -151,7 +191,6 @@ export function WebAgentPage({
   const [modelMenuOpen, setModelMenuOpen] = useState<boolean>(false);
   const [repoMenuOpen, setRepoMenuOpen] = useState<boolean>(false);
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
-  const [githubToastOpen, setGithubToastOpen] = useState<boolean>(false);
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
 
   const [apiProvider, setApiProvider] = useState<ByokProvider>(() => {
@@ -203,10 +242,16 @@ export function WebAgentPage({
   });
 
   const currentTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0];
-  const isConnected = agentState !== "signed-out";
-  const activeProject: WebProject | null =
-    projects.find((p) => p.id === currentTab.projectId) ?? null;
-  const activeFile = MOCK_FILES[selectedFileIndex] ?? MOCK_FILES[0] ?? null;
+  const isConnected = githubStatus.connected || agentState !== "signed-out";
+  const activeProject: GitHubRepo | null =
+    repos.find((r) => String(r.id) === currentTab.projectId) ?? null;
+  const activeTreeKey = activeProject ? `${activeProject.fullName}@${currentTab.branch}` : "";
+  const activeTree = activeTreeKey ? (repoTreeByKey[activeTreeKey] ?? []).filter((e) => e.type === "blob") : [];
+  const currentDiffs = diffsByTab[currentTab.id] ?? [];
+  const currentOperations = operationsByTab[currentTab.id] ?? [];
+  const currentPrMeta = prMetaByTab[currentTab.id];
+  const currentPrResult = prResultByTab[currentTab.id];
+  const currentTerminalLogs = terminalLogsByTab[currentTab.id] ?? [];
   const currentFollowUps = followUpsByTab[currentTab.id] ?? [];
   const currentInitialReply = initialReplyByTab[currentTab.id];
   const hasSavedApiKey = savedApiKey.trim().length > 0;
@@ -217,29 +262,119 @@ export function WebAgentPage({
         ? "••••••••"
         : "";
 
+  const loadReposList = async () => {
+    setLoadingRepos(true);
+    setRepoError(null);
+    try {
+      const list = await fetchGitHubRepos();
+      setRepos(list);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to load GitHub repositories.";
+      setRepoError(msg);
+      if (err instanceof GitHubClientError && err.code === "GITHUB_TOKEN_EXPIRED") {
+        setGithubStatus((prev) => ({ ...prev, connected: false, user: null }));
+        setGithubNotice({ kind: "error", text: msg });
+      }
+    } finally {
+      setLoadingRepos(false);
+    }
+  };
+
+  const loadGitHubConnection = async () => {
+    try {
+      const status = await fetchGitHubStatus();
+      setGithubStatus(status);
+      if (status.connected) {
+        setAgentState((prev) => (prev === "signed-out" ? "connected-empty" : prev));
+        void loadReposList();
+      }
+    } catch {
+      // keep disconnected state
+    }
+  };
+
   useEffect(() => {
-    if (!mobileDrawerOpen && !settingsOpen) return;
+    const params = new URLSearchParams(window.location.search);
+    const ghParam = params.get("github");
+    const reason = params.get("reason");
+    if (ghParam === "connected") {
+      setGithubNotice({ kind: "info", text: "GitHub connected successfully." });
+      window.history.replaceState({}, "", window.location.pathname);
+    } else if (ghParam === "error") {
+      setGithubNotice({
+        kind: "error",
+        text: reason ? `GitHub authorization failed: ${reason}` : "GitHub authorization failed.",
+      });
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+    void loadGitHubConnection();
+  }, []);
+
+  useEffect(() => {
+    if (!mobileDrawerOpen && !settingsOpen && !repoModalOpen && !prModalOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setMobileDrawerOpen(false);
         setSettingsOpen(false);
+        setRepoModalOpen(false);
+        setPrModalOpen(false);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [mobileDrawerOpen, settingsOpen]);
+  }, [mobileDrawerOpen, settingsOpen, repoModalOpen, prModalOpen]);
 
   useEffect(() => {
-    if (!githubToastOpen) return;
-    const timer = window.setTimeout(() => setGithubToastOpen(false), 3800);
+    if (!githubNotice) return;
+    const timer = window.setTimeout(() => setGithubNotice(null), 5000);
     return () => window.clearTimeout(timer);
-  }, [githubToastOpen]);
+  }, [githubNotice]);
 
   useEffect(() => {
     if (!apiKeyNotice) return;
     const timer = window.setTimeout(() => setApiKeyNotice(null), 2600);
     return () => window.clearTimeout(timer);
   }, [apiKeyNotice]);
+
+  const handleConnectGitHub = async () => {
+    setGithubLoading(true);
+    setGithubNotice(null);
+    try {
+      const authUrl = await startGitHubOAuth("/web");
+      window.location.assign(authUrl);
+    } catch (err) {
+      const msg =
+        err instanceof GitHubClientError && err.status === 401
+          ? "Please sign in to your Emdash account first before connecting GitHub."
+          : err instanceof Error
+            ? err.message
+            : "Could not start GitHub connection.";
+      setGithubNotice({ kind: "error", text: msg });
+      setGithubLoading(false);
+    }
+  };
+
+  const handleDisconnectGitHub = async () => {
+    setGithubLoading(true);
+    try {
+      await disconnectGitHub();
+      setGithubStatus((prev) => ({ ...prev, connected: false, user: null, scope: null }));
+      setRepos([]);
+      setRepoTreeByKey({});
+      setSelectedFilePath(null);
+      setSelectedFileContent("");
+      setTabs((prev) => prev.map((t) => ({ ...t, projectId: "" })));
+      setAgentState("signed-out");
+      setGithubNotice({ kind: "info", text: "GitHub account disconnected." });
+    } catch (err) {
+      setGithubNotice({
+        kind: "error",
+        text: err instanceof Error ? err.message : "Failed to disconnect GitHub.",
+      });
+    } finally {
+      setGithubLoading(false);
+    }
+  };
 
   const handleSaveApiKey = (nextProvider = apiProvider, nextKey = apiKeyInput) => {
     const cleanKey = nextKey.trim();
@@ -268,14 +403,14 @@ export function WebAgentPage({
     setApiKeyNotice("API key removed");
   };
 
-  const handleOpenNewTab = (projectId = activeProject?.id ?? "") => {
-    const project = projects.find((p) => p.id === projectId) ?? null;
+  const handleOpenNewTab = (projectId = activeProject ? String(activeProject.id) : "") => {
+    const project = repos.find((r) => String(r.id) === projectId) ?? null;
     const newId = `tab-${Date.now()}`;
     const newTab: BrowserTab = {
       id: newId,
       title: "New tab",
-      projectId: project?.id ?? "",
-      branch: project?.branch ?? "main",
+      projectId: project ? String(project.id) : "",
+      branch: project?.defaultBranch ?? "main",
       isEmpty: true,
     };
     setTabs((prev) => [...prev, newTab]);
@@ -294,8 +429,8 @@ export function WebAgentPage({
       const freshTab: BrowserTab = {
         id: `tab-${Date.now()}`,
         title: "New tab",
-        projectId: activeProject?.id ?? "",
-        branch: activeProject?.branch ?? "main",
+        projectId: activeProject ? String(activeProject.id) : "",
+        branch: activeProject?.defaultBranch ?? "main",
         isEmpty: true,
       };
       setTabs([freshTab]);
@@ -344,21 +479,61 @@ export function WebAgentPage({
     setMobileDrawerOpen(false);
   };
 
-  const handleSelectProject = (projectId: string) => {
-    const proj = projects.find((p) => p.id === projectId);
-    if (!proj) return;
+  const loadTreeForRepo = async (repo: GitHubRepo, branch: string) => {
+    const key = `${repo.fullName}@${branch}`;
+    if (repoTreeByKey[key]) return;
+    setLoadingTree(true);
+    try {
+      const tree = await fetchRepoTree(repo.owner, repo.name, branch);
+      setRepoTreeByKey((prev) => ({ ...prev, [key]: tree }));
+    } catch (err) {
+      setGithubNotice({
+        kind: "error",
+        text: err instanceof Error ? err.message : "Failed to load repository files.",
+      });
+    } finally {
+      setLoadingTree(false);
+    }
+  };
+
+  const handleSelectRepo = (repo: GitHubRepo, branch?: string) => {
+    const targetBranch = branch || repo.defaultBranch || "main";
     setTabs((prev) =>
       prev.map((t) =>
         t.id === currentTab.id
-          ? { ...t, projectId: proj.id, branch: proj.branch }
+          ? { ...t, projectId: String(repo.id), branch: targetBranch }
           : t
       )
     );
-    if (!isConnected) {
+    setSelectedFilePath(null);
+    setSelectedFileContent("");
+    if (agentState === "signed-out") {
       setAgentState("connected-empty");
     }
     setRepoMenuOpen(false);
     setMobileDrawerOpen(false);
+    void loadTreeForRepo(repo, targetBranch);
+  };
+
+  const handleSelectRepoFile = async (filePath: string) => {
+    if (!activeProject) return;
+    setSelectedFilePath(filePath);
+    setLoadingFile(true);
+    try {
+      const file = await fetchRepoFile(
+        activeProject.owner,
+        activeProject.name,
+        filePath,
+        currentTab.branch
+      );
+      setSelectedFileContent(file.content);
+    } catch (err) {
+      setSelectedFileContent(
+        `// Failed to load ${filePath}: ${err instanceof Error ? err.message : "Unknown error"}`
+      );
+    } finally {
+      setLoadingFile(false);
+    }
   };
 
   const runWebAgentTurn = async (params: {
@@ -397,10 +572,27 @@ export function WebAgentPage({
       return;
     }
 
+    const appendLog = (line: string) => {
+      setTerminalLogsByTab((prev) => ({
+        ...prev,
+        [params.tabId]: [...(prev[params.tabId] ?? []), line],
+      }));
+    };
+
+    appendLog(
+      activeProject
+        ? `$ agent ${params.mode} --repo ${activeProject.fullName} --branch ${currentTab.branch}`
+        : `$ agent ${params.mode} --standalone`
+    );
+
     try {
+      const authHeaders = await getAuthHeaders();
       const response = await fetch("/api/web-agent/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders,
+        },
         body: JSON.stringify({
           provider: apiProvider,
           apiKey: key,
@@ -408,7 +600,9 @@ export function WebAgentPage({
           mode: params.mode,
           prompt: params.prompt,
           history: params.history,
-          projectName: activeProject?.name,
+          projectName: activeProject?.fullName,
+          repoOwner: activeProject?.owner,
+          repoName: activeProject?.name,
           branch: currentTab.branch,
         }),
       });
@@ -417,10 +611,18 @@ export function WebAgentPage({
         text?: string;
         modelId?: string;
         error?: string;
+        inspectedFiles?: string[];
+        operations?: GitHubFileOperation[];
+        diffs?: GitHubDiffFile[];
+        suggestedBranch?: string;
+        suggestedCommitMessage?: string;
+        suggestedPrTitle?: string;
+        suggestedPrBody?: string;
       };
 
       if (!response.ok || !payload.text) {
         const errMsg = payload.error || `Request failed with status ${response.status}.`;
+        appendLog(`! Error: ${errMsg}`);
         if (params.followUpId) {
           setFollowUpsByTab((prev) => ({
             ...prev,
@@ -446,6 +648,26 @@ export function WebAgentPage({
           setAgentState("done");
         }
         return;
+      }
+
+      if (Array.isArray(payload.inspectedFiles) && payload.inspectedFiles.length > 0) {
+        appendLog(`✓ Inspected ${payload.inspectedFiles.length} repository files: ${payload.inspectedFiles.join(", ")}`);
+      }
+      if (Array.isArray(payload.diffs) && payload.diffs.length > 0) {
+        setDiffsByTab((prev) => ({ ...prev, [params.tabId]: payload.diffs! }));
+        setOperationsByTab((prev) => ({ ...prev, [params.tabId]: payload.operations ?? [] }));
+        setPrMetaByTab((prev) => ({
+          ...prev,
+          [params.tabId]: {
+            branch: payload.suggestedBranch || `emdash/update-${Date.now().toString(36).slice(-4)}`,
+            commitMessage: payload.suggestedCommitMessage || "feat: apply Emdash AI changes",
+            prTitle: payload.suggestedPrTitle || params.prompt.slice(0, 72),
+            prBody: payload.suggestedPrBody || payload.text || "",
+          },
+        }));
+        appendLog(`✓ Staged ${payload.diffs.length} file change(s) for review in Changes tab.`);
+      } else {
+        appendLog(`✓ Completed ${params.mode} pass with ${payload.modelId || modelName}.`);
       }
 
       if (params.followUpId) {
@@ -699,25 +921,67 @@ export function WebAgentPage({
       {/* 3. Middle Scrollable Area: Projects Section and Chats Section */}
       <div className="flex-1 overflow-y-auto p-2.5 space-y-5">
         <div>
-          <div className="px-1.5 mb-1.5 font-mono uppercase text-[10px] tracking-wider text-muted-foreground flex items-center justify-between">
-            <span>Projects</span>
-            <span className="font-mono text-[10px] text-muted-foreground tabular-nums">
-              {projects.length}
-            </span>
+          <div className="px-1.5 mb-1.5 font-mono uppercase text-[10px] tracking-wider text-muted-foreground flex items-center justify-between gap-1">
+            <span>Repositories</span>
+            <div className="flex items-center gap-1">
+              {githubStatus.connected && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void loadReposList()}
+                    disabled={loadingRepos}
+                    title="Refresh repositories"
+                    aria-label="Refresh repositories"
+                    className="p-0.5 text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    <RefreshCw className={cn("size-3", loadingRepos && "animate-spin")} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRepoModalOpen(true)}
+                    title="Browse & search repositories"
+                    aria-label="Browse repositories"
+                    className="p-0.5 text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    <Search className="size-3" />
+                  </button>
+                </>
+              )}
+              <span className="font-mono text-[10px] text-muted-foreground tabular-nums">
+                {repos.length}
+              </span>
+            </div>
           </div>
           <div className="space-y-0.5">
-            {projects.length === 0 ? (
+            {!githubStatus.connected ? (
+              <div className="px-2 py-2 border border-dashed border-edge bg-background text-[11px] text-muted-foreground space-y-1.5">
+                <div>Connect GitHub to browse your repositories and start coding sessions.</div>
+                <button
+                  type="button"
+                  onClick={() => void handleConnectGitHub()}
+                  disabled={githubLoading}
+                  className="font-mono uppercase text-[10px] text-[#c23800] dark:text-[#ff7a3d] hover:underline cursor-pointer"
+                >
+                  {githubLoading ? "Connecting…" : "Connect GitHub →"}
+                </button>
+              </div>
+            ) : loadingRepos && repos.length === 0 ? (
+              <div className="px-2 py-2 text-xs text-muted-foreground flex items-center gap-1.5">
+                <Loader2 className="size-3 animate-spin" />
+                <span>Loading repositories…</span>
+              </div>
+            ) : repos.length === 0 ? (
               <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                No repositories connected
+                No repositories found
               </div>
             ) : (
-              projects.map((proj) => {
-                const selected = proj.id === activeProject?.id;
+              repos.slice(0, 12).map((proj) => {
+                const selected = activeProject?.id === proj.id;
                 return (
                   <button
                     key={proj.id}
                     type="button"
-                    onClick={() => handleSelectProject(proj.id)}
+                    onClick={() => handleSelectRepo(proj)}
                     className={cn(
                       "w-full text-left px-2 py-1.5 border transition-colors cursor-pointer",
                       selected
@@ -737,16 +1001,26 @@ export function WebAgentPage({
                         />
                         <span className="truncate font-medium">{proj.name}</span>
                       </span>
-                      <span className="font-mono text-[10px] text-muted-foreground tabular-nums shrink-0">
-                        {proj.updatedAt}
+                      <span className="font-mono text-[9px] uppercase text-muted-foreground shrink-0">
+                        {proj.private ? "Priv" : "Pub"}
                       </span>
                     </div>
                     <div className="mt-0.5 pl-5 font-mono text-[10px] text-muted-foreground truncate">
-                      {proj.branch}
+                      {selected ? currentTab.branch : proj.defaultBranch}
+                      {proj.language ? ` · ${proj.language}` : ""}
                     </div>
                   </button>
                 );
               })
+            )}
+            {githubStatus.connected && repos.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setRepoModalOpen(true)}
+                className="w-full mt-1 px-2 py-1 text-left font-mono uppercase text-[10px] text-[#c23800] dark:text-[#ff7a3d] hover:underline cursor-pointer"
+              >
+                Browse all {repos.length} repositories…
+              </button>
             )}
           </div>
         </div>
@@ -799,19 +1073,67 @@ export function WebAgentPage({
 
       {/* 4. Pinned Footer: Connect GitHub, Settings & Theme switch in a single line, Sponsored slot */}
       <div className="p-2.5 border-t border-edge bg-surface shrink-0 space-y-2">
+        {githubStatus.connected && githubStatus.user && (
+          <div className="px-2 py-1.5 border border-edge bg-background flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              {githubStatus.user.avatarUrl ? (
+                <img
+                  src={githubStatus.user.avatarUrl}
+                  alt={githubStatus.user.username}
+                  className="size-5 border border-edge object-cover shrink-0"
+                />
+              ) : (
+                <Github className="size-4 shrink-0" />
+              )}
+              <span className="font-mono text-[11px] text-foreground truncate">
+                @{githubStatus.user.username}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleDisconnectGitHub()}
+              disabled={githubLoading}
+              title="Disconnect GitHub"
+              aria-label="Disconnect GitHub"
+              className="text-muted-foreground hover:text-destructive cursor-pointer shrink-0 p-0.5"
+            >
+              <LogOut className="size-3.5" />
+            </button>
+          </div>
+        )}
         <div className="flex items-center gap-1.5">
-          <Button
-            type="button"
-            variant="default"
-            size="sm"
-            onClick={() => setGithubToastOpen(true)}
-            aria-label="Connect GitHub"
-            title="Connect GitHub"
-            className="flex-1 min-w-0 h-8 px-2 font-mono uppercase text-[10px] flex items-center justify-center gap-1.5 whitespace-nowrap"
-          >
-            <Github className="size-3.5 shrink-0" />
-            <span>GitHub</span>
-          </Button>
+          {githubStatus.connected ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setRepoModalOpen(true)}
+              aria-label="Select GitHub repository"
+              title="Select GitHub repository"
+              className="flex-1 min-w-0 h-8 px-2 border-edge bg-background font-mono uppercase text-[10px] flex items-center justify-center gap-1.5 whitespace-nowrap"
+            >
+              <FolderGit2 className="size-3.5 shrink-0 text-[#c23800] dark:text-[#ff7a3d]" />
+              <span className="truncate">{activeProject ? activeProject.name : "Select Repo"}</span>
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              onClick={() => void handleConnectGitHub()}
+              disabled={githubLoading}
+              aria-label="Connect GitHub"
+              title="Connect GitHub"
+              className="flex-1 min-w-0 h-8 px-2 font-mono uppercase text-[10px] flex items-center justify-center gap-1.5 whitespace-nowrap"
+            >
+              {githubLoading ? (
+                <Loader2 className="size-3.5 animate-spin shrink-0" />
+              ) : (
+                <Github className="size-3.5 shrink-0" />
+              )}
+              <span>Connect GitHub</span>
+            </Button>
+          )}
 
           <button
             type="button"
@@ -1494,7 +1816,7 @@ export function WebAgentPage({
                               {
                                 step: "03",
                                 label: "Apply updates",
-                                status: MOCK_DIFFS.length > 0 ? "Done" : "Pending",
+                                status: currentDiffs.length > 0 ? "Done" : "Pending",
                               },
                               {
                                 step: "04",
@@ -1502,7 +1824,7 @@ export function WebAgentPage({
                                 status:
                                   agentState === "agent-running"
                                     ? "Running"
-                                    : MOCK_TERMINAL_LOGS.length > 0
+                                    : currentTerminalLogs.length > 0
                                       ? "Done"
                                       : "Pending",
                               },
@@ -1610,30 +1932,49 @@ export function WebAgentPage({
 
                       {activeTab === "files" && (
                         <div className="flex flex-col h-full min-h-0">
-                          {MOCK_FILES.length === 0 || !activeFile ? (
+                          {!activeProject ? (
+                            <div className="flex-1 grid place-items-center p-6 text-center">
+                              <div className="max-w-xs space-y-2">
+                                <FileCode2 className="size-5 text-muted-foreground mx-auto" />
+                                <div className="font-mono uppercase text-[10px] text-muted-foreground">
+                                  No repository selected
+                                </div>
+                                <p className="text-xs text-muted-foreground leading-relaxed">
+                                  Connect GitHub and select a repository to browse and inspect its files.
+                                </p>
+                              </div>
+                            </div>
+                          ) : loadingTree && activeTree.length === 0 ? (
+                            <div className="flex-1 grid place-items-center p-6 text-center">
+                              <div className="flex items-center gap-2 font-mono text-xs text-muted-foreground">
+                                <Loader2 className="size-4 animate-spin text-primary" />
+                                <span>Loading repository tree…</span>
+                              </div>
+                            </div>
+                          ) : activeTree.length === 0 ? (
                             <div className="flex-1 grid place-items-center p-6 text-center">
                               <div className="max-w-xs space-y-1.5">
                                 <FileCode2 className="size-5 text-muted-foreground mx-auto" />
                                 <div className="font-mono uppercase text-[10px] text-muted-foreground">
-                                  No files in workspace
+                                  No files found
                                 </div>
                                 <p className="text-xs text-muted-foreground leading-relaxed">
-                                  Repository files inspected or generated by the agent will appear here.
+                                  {activeProject.fullName} ({currentTab.branch}) appears empty.
                                 </p>
                               </div>
                             </div>
                           ) : (
                             <>
-                              <div className="border-b border-edge bg-card divide-y divide-edge shrink-0">
-                                {MOCK_FILES.map((file, idx) => {
-                                  const selected = idx === selectedFileIndex;
+                              <div className="max-h-48 overflow-y-auto border-b border-edge bg-card divide-y divide-edge shrink-0">
+                                {activeTree.slice(0, 120).map((file) => {
+                                  const selected = file.path === selectedFilePath;
                                   return (
                                     <button
                                       key={file.path}
                                       type="button"
-                                      onClick={() => setSelectedFileIndex(idx)}
+                                      onClick={() => void handleSelectRepoFile(file.path)}
                                       className={cn(
-                                        "w-full text-left px-4 py-2 font-mono text-xs flex items-center justify-between transition-colors cursor-pointer",
+                                        "w-full text-left px-4 py-1.5 font-mono text-xs flex items-center justify-between transition-colors cursor-pointer",
                                         selected
                                           ? "bg-background text-[#c23800] dark:text-[#ff7a3d] font-semibold"
                                           : "text-foreground hover:bg-muted/50"
@@ -1643,9 +1984,11 @@ export function WebAgentPage({
                                         <FileCode2 className="size-3.5 shrink-0" />
                                         <span className="truncate">{file.path}</span>
                                       </span>
-                                      <span className="text-[10px] uppercase text-muted-foreground shrink-0 ml-2">
-                                        {file.language}
-                                      </span>
+                                      {file.size !== undefined && (
+                                        <span className="text-[10px] text-muted-foreground shrink-0 ml-2 tabular-nums">
+                                          {file.size} B
+                                        </span>
+                                      )}
                                     </button>
                                   );
                                 })}
@@ -1654,45 +1997,58 @@ export function WebAgentPage({
                               <div className="flex-1 min-h-0 flex flex-col bg-background">
                                 <div className="shrink-0 px-4 py-2 border-b border-edge bg-surface flex items-center justify-between gap-2">
                                   <span className="font-mono text-[11px] text-foreground truncate">
-                                    {activeFile.path}
+                                    {selectedFilePath || "Select a file above to inspect"}
                                   </span>
-                                  <div className="flex items-center gap-2 shrink-0">
-                                    <span className="font-mono uppercase text-[10px] text-muted-foreground">
-                                      Read-only
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        void handleCopyFile(activeFile.path, activeFile.content)
-                                      }
-                                      className="inline-flex items-center gap-1 px-2 py-0.5 border border-edge bg-card hover:border-primary font-mono uppercase text-[10px] text-foreground cursor-pointer"
-                                    >
-                                      {copiedPath === activeFile.path ? (
-                                        <>
-                                          <Check className="size-3 text-emerald-700 dark:text-emerald-400" />
-                                          <span>Copied</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Copy className="size-3" />
-                                          <span>Copy</span>
-                                        </>
-                                      )}
-                                    </button>
-                                  </div>
+                                  {selectedFilePath && (
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <span className="font-mono uppercase text-[10px] text-muted-foreground">
+                                        {currentTab.branch}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          void handleCopyFile(selectedFilePath, selectedFileContent)
+                                        }
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 border border-edge bg-card hover:border-primary font-mono uppercase text-[10px] text-foreground cursor-pointer"
+                                      >
+                                        {copiedPath === selectedFilePath ? (
+                                          <>
+                                            <Check className="size-3 text-emerald-700 dark:text-emerald-400" />
+                                            <span>Copied</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Copy className="size-3" />
+                                            <span>Copy</span>
+                                          </>
+                                        )}
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
 
                                 <div className="flex-1 overflow-auto p-3 font-mono text-xs leading-relaxed">
-                                  {activeFile.content.split("\n").map((line, lineIdx) => (
-                                    <div key={lineIdx} className="flex">
-                                      <span className="w-8 pr-3 text-right select-none text-muted-foreground/60 tabular-nums shrink-0">
-                                        {lineIdx + 1}
-                                      </span>
-                                      <span className="whitespace-pre text-foreground">
-                                        {line || " "}
-                                      </span>
+                                  {loadingFile ? (
+                                    <div className="flex items-center gap-2 text-muted-foreground p-2">
+                                      <Loader2 className="size-3.5 animate-spin" />
+                                      <span>Fetching file from GitHub…</span>
                                     </div>
-                                  ))}
+                                  ) : !selectedFilePath ? (
+                                    <div className="text-muted-foreground p-2">
+                                      Click any file in the repository tree above to view its contents.
+                                    </div>
+                                  ) : (
+                                    selectedFileContent.split("\n").map((line, lineIdx) => (
+                                      <div key={lineIdx} className="flex">
+                                        <span className="w-8 pr-3 text-right select-none text-muted-foreground/60 tabular-nums shrink-0">
+                                          {lineIdx + 1}
+                                        </span>
+                                        <span className="whitespace-pre text-foreground">
+                                          {line || " "}
+                                        </span>
+                                      </div>
+                                    ))
+                                  )}
                                 </div>
                               </div>
                             </>
@@ -1703,19 +2059,19 @@ export function WebAgentPage({
                       {activeTab === "terminal" && (
                         <div className="p-4 h-full flex flex-col gap-3">
                           <div className="flex-1 border border-edge bg-card p-3 font-mono text-xs leading-relaxed overflow-y-auto space-y-1">
-                            {MOCK_TERMINAL_LOGS.length === 0 ? (
+                            {currentTerminalLogs.length === 0 ? (
                               <div className="h-full grid place-items-center text-center p-4">
                                 <div className="space-y-1">
                                   <div className="uppercase text-[10px] text-muted-foreground">
-                                    No terminal output yet
+                                    No activity logs yet
                                   </div>
                                   <p className="font-sans text-xs text-muted-foreground">
-                                    Commands executed by the agent will appear here.
+                                    Repository inspections and agent execution steps will appear here.
                                   </p>
                                 </div>
                               </div>
                             ) : (
-                              MOCK_TERMINAL_LOGS.map((line, i) => (
+                              currentTerminalLogs.map((line, i) => (
                                 <div
                                   key={i}
                                   className={cn(
@@ -1723,7 +2079,9 @@ export function WebAgentPage({
                                       ? "text-[#c23800] dark:text-[#ff7a3d] font-semibold"
                                       : line.startsWith("✓")
                                         ? "text-emerald-700 dark:text-emerald-400"
-                                        : "text-foreground"
+                                        : line.startsWith("!")
+                                          ? "text-destructive"
+                                          : "text-foreground"
                                   )}
                                 >
                                   {line}
@@ -1735,16 +2093,14 @@ export function WebAgentPage({
                           <div className="border border-edge bg-card px-3 py-2 flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2 flex-1 min-w-0">
                               <TerminalIcon className="size-3.5 text-muted-foreground shrink-0" />
-                              <input
-                                type="text"
-                                disabled
-                                aria-label="Terminal input (Preview only)"
-                                placeholder="Shell input disabled"
-                                className="w-full bg-transparent font-mono text-xs text-muted-foreground focus:outline-none cursor-not-allowed"
-                              />
+                              <span className="font-mono text-xs text-muted-foreground truncate">
+                                {activeProject
+                                  ? `${activeProject.fullName} (${currentTab.branch})`
+                                  : "Standalone Web Agent"}
+                              </span>
                             </div>
                             <span className="font-mono uppercase text-[10px] text-muted-foreground shrink-0">
-                              Preview only
+                              Activity Log
                             </span>
                           </div>
                         </div>
@@ -1755,14 +2111,14 @@ export function WebAgentPage({
                           <div className="border border-edge bg-card p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div>
                               <div className="font-mono uppercase text-[10px] text-muted-foreground">
-                                Git Actions · Preview only
+                                Git Actions · Safe Feature Branch
                               </div>
                               <div className="text-xs text-foreground mt-0.5">
-                                {MOCK_DIFFS.length === 0 ? (
+                                {currentDiffs.length === 0 ? (
                                   "No pending file changes"
                                 ) : (
                                   <>
-                                    {MOCK_DIFFS.length} changed files on{" "}
+                                    {currentDiffs.length} modified file(s) staged from{" "}
                                     <code className="font-mono">{currentTab.branch}</code>
                                   </>
                                 )}
@@ -1773,38 +2129,48 @@ export function WebAgentPage({
                               <Button
                                 type="button"
                                 size="sm"
-                                disabled
-                                title="Preview only"
-                                className="h-8 px-3 font-mono uppercase text-[10px]"
-                              >
-                                Commit to branch · Preview only
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                disabled
-                                title="Preview only"
-                                className="h-8 px-3 border-edge font-mono uppercase text-[10px] gap-1"
+                                disabled={!activeProject || currentOperations.length === 0}
+                                onClick={() => setPrModalOpen(true)}
+                                className="h-8 px-3 font-mono uppercase text-[10px] gap-1.5"
                               >
                                 <GitPullRequest className="size-3" />
-                                <span>Open pull request · Preview only</span>
+                                <span>Create Pull Request</span>
                               </Button>
                             </div>
                           </div>
 
-                          {MOCK_DIFFS.length === 0 ? (
+                          {currentPrResult && (
+                            <div className="border border-emerald-500/40 bg-emerald-500/10 p-3.5 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+                              <div className="space-y-0.5">
+                                <div className="text-emerald-700 dark:text-emerald-400 font-semibold uppercase">
+                                  PR #{currentPrResult.number} · {currentPrResult.state}
+                                </div>
+                                <div className="text-foreground font-sans">{currentPrResult.title}</div>
+                              </div>
+                              <a
+                                href={currentPrResult.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-edge bg-background text-foreground hover:border-primary uppercase text-[10px]"
+                              >
+                                <span>View on GitHub</span>
+                                <ExternalLink className="size-3" />
+                              </a>
+                            </div>
+                          )}
+
+                          {currentDiffs.length === 0 ? (
                             <div className="border border-edge bg-card p-6 text-center space-y-1">
                               <div className="font-mono uppercase text-[10px] text-muted-foreground">
                                 No file changes yet
                               </div>
                               <p className="text-xs text-muted-foreground">
-                                Modified files and unified diffs will appear here.
+                                Select a repository and run a Build instruction to review file diffs before opening a PR.
                               </p>
                             </div>
                           ) : (
                             <div className="space-y-3">
-                              {MOCK_DIFFS.map((diff) => {
+                              {currentDiffs.map((diff) => {
                                 const isExpanded = expandedDiffs[diff.path] ?? true;
                                 return (
                                   <div key={diff.path} className="border border-edge bg-card">
@@ -2108,8 +2474,30 @@ export function WebAgentPage({
                   GitHub Connection
                 </label>
                 <div className="p-2.5 border border-edge bg-background flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground">Status</span>
-                  <span className="text-[#c23800] dark:text-[#ff7a3d]">Coming soon</span>
+                  <span className="text-muted-foreground truncate">
+                    {githubStatus.connected && githubStatus.user
+                      ? `Connected as @${githubStatus.user.username}`
+                      : "Not connected"}
+                  </span>
+                  {githubStatus.connected ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleDisconnectGitHub()}
+                      disabled={githubLoading}
+                      className="text-destructive hover:underline uppercase text-[10px] cursor-pointer shrink-0"
+                    >
+                      Disconnect
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void handleConnectGitHub()}
+                      disabled={githubLoading}
+                      className="text-[#c23800] dark:text-[#ff7a3d] hover:underline uppercase text-[10px] cursor-pointer shrink-0"
+                    >
+                      Connect GitHub
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -2134,21 +2522,64 @@ export function WebAgentPage({
         </div>
       )}
 
-      {githubToastOpen && (
+      <GitHubRepoModal
+        open={repoModalOpen}
+        onClose={() => setRepoModalOpen(false)}
+        repos={repos}
+        loadingRepos={loadingRepos}
+        repoError={repoError}
+        onRefreshRepos={() => void loadReposList()}
+        selectedRepo={activeProject}
+        selectedBranch={currentTab.branch}
+        onConfirmSelection={(repo, branch) => handleSelectRepo(repo, branch)}
+      />
+
+      {activeProject && (
+        <GitHubPrModal
+          open={prModalOpen}
+          onClose={() => setPrModalOpen(false)}
+          repo={activeProject}
+          baseBranch={currentTab.branch}
+          initialBranch={
+            currentPrMeta?.branch || `emdash/update-${Date.now().toString(36).slice(-4)}`
+          }
+          initialCommitMessage={currentPrMeta?.commitMessage || "feat: apply Emdash AI changes"}
+          initialPrTitle={currentPrMeta?.prTitle || "Changes by Emdash AI Agent"}
+          initialPrBody={currentPrMeta?.prBody || "Generated via Emdash Web Coding Agent."}
+          changes={currentOperations}
+          onPrCreated={(pr) => {
+            setPrResultByTab((prev) => ({ ...prev, [currentTab.id]: pr }));
+            setTerminalLogsByTab((prev) => ({
+              ...prev,
+              [currentTab.id]: [
+                ...(prev[currentTab.id] ?? []),
+                `✓ Pushed branch ${pr.branch} and opened PR #${pr.number}: ${pr.url}`,
+              ],
+            }));
+          }}
+        />
+      )}
+
+      {githubNotice && (
         <div
           role="status"
           aria-live="polite"
           className="fixed bottom-4 right-4 z-50 flex items-center gap-3 border border-edge bg-card px-3.5 py-2.5 text-xs shadow-lg max-w-sm"
         >
-          <span className="font-mono uppercase text-[10px] font-semibold border border-edge px-1.5 py-0.5 text-[#c23800] dark:text-[#ff7a3d] bg-background shrink-0">
-            Coming soon
+          <span
+            className={cn(
+              "font-mono uppercase text-[10px] font-semibold border border-edge px-1.5 py-0.5 bg-background shrink-0",
+              githubNotice.kind === "error"
+                ? "text-destructive"
+                : "text-[#c23800] dark:text-[#ff7a3d]"
+            )}
+          >
+            {githubNotice.kind === "error" ? "GitHub Error" : "GitHub"}
           </span>
-          <span className="text-foreground">
-            GitHub connection is coming soon.
-          </span>
+          <span className="text-foreground">{githubNotice.text}</span>
           <button
             type="button"
-            onClick={() => setGithubToastOpen(false)}
+            onClick={() => setGithubNotice(null)}
             aria-label="Dismiss notice"
             className="text-muted-foreground hover:text-foreground cursor-pointer shrink-0"
           >

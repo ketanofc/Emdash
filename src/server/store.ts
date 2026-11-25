@@ -100,6 +100,18 @@ export interface LlmDailyRecord {
   output_tokens: number;
 }
 
+export interface GitHubConnectionRecord {
+  user_id: string;
+  github_user_id: string;
+  username: string;
+  avatar_url: string | null;
+  scope: string | null;
+  access_token_enc: string;
+  key_version: number;
+  connected_at: string;
+  updated_at: string;
+}
+
 interface PersistedSnapshot {
   config: AppConfigRecord;
   profiles: ProfileRecord[];
@@ -113,6 +125,7 @@ interface PersistedSnapshot {
   llm_calls: LlmCallRecord[];
   llm_daily: LlmDailyRecord[];
   audit_log: AuditLogRecord[];
+  github_connections?: GitHubConnectionRecord[];
 }
 
 export function getLocalDayKey(date: Date, timeZone: string): string {
@@ -200,6 +213,7 @@ export class LocalAppStore implements LlmRouterStore {
   private llmCalls: LlmCallRecord[] = [];
   private llmDaily: LlmDailyRecord[] = [];
   private auditLog: AuditLogRecord[] = [];
+  private githubConnections = new Map<string, GitHubConnectionRecord>();
   private nowFn: () => number;
 
   constructor(options?: { persistPath?: string | null; nowMs?: () => number }) {
@@ -266,6 +280,9 @@ export class LocalAppStore implements LlmRouterStore {
       if (Array.isArray(raw.llm_calls)) this.llmCalls = raw.llm_calls;
       if (Array.isArray(raw.llm_daily)) this.llmDaily = raw.llm_daily;
       if (Array.isArray(raw.audit_log)) this.auditLog = raw.audit_log;
+      if (Array.isArray(raw.github_connections)) {
+        this.githubConnections = new Map(raw.github_connections.map((g) => [g.user_id, g]));
+      }
     } catch {
       // ignore corrupted snapshot
     }
@@ -294,6 +311,7 @@ export class LocalAppStore implements LlmRouterStore {
         llm_calls: this.llmCalls,
         llm_daily: this.llmDaily,
         audit_log: this.auditLog,
+        github_connections: Array.from(this.githubConnections.values()),
       };
       fs.writeFileSync(this.persistPath, JSON.stringify(snapshot, null, 2), "utf8");
     } catch (err) {
@@ -1137,6 +1155,23 @@ export class LocalAppStore implements LlmRouterStore {
     this.llmCalls = kept;
     this.persistToDisk();
     return pruned;
+  }
+
+  // ---- GitHub Connections ----
+  getGitHubConnection(userId: string): GitHubConnectionRecord | null {
+    return this.githubConnections.get(userId) ?? null;
+  }
+
+  upsertGitHubConnection(conn: GitHubConnectionRecord): GitHubConnectionRecord {
+    this.githubConnections.set(conn.user_id, conn);
+    this.persistToDisk();
+    return conn;
+  }
+
+  deleteGitHubConnection(userId: string): boolean {
+    const deleted = this.githubConnections.delete(userId);
+    if (deleted) this.persistToDisk();
+    return deleted;
   }
 }
 

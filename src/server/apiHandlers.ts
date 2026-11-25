@@ -4,8 +4,17 @@ import { redactSecrets } from "../lib/llm/crypto.ts";
 import { callLLM } from "../lib/llm/router.ts";
 import { AdapterHttpError, NoAvailableProviderError, type RouteStage } from "../lib/llm/types.ts";
 import { runPipeline } from "../lib/pipeline.ts";
+import { getRepoFileContent, getRepoTree, GitHubApiError } from "../lib/github/api.ts";
+import {
+  buildRepoAgentSystemPrompt,
+  isExplicitDeleteRequested,
+  parseAgentStructuredResponse,
+  selectContextFiles,
+  validateAndBuildDiffs,
+} from "../lib/github/agent.ts";
 import type { AttachedFile, BuildPlan, DesignBrief, GeneratedFiles, PipelineStage } from "../types.ts";
 import { getSupabaseAdmin, resolveAuthenticatedUser, type ServerContext } from "./adminRouter.ts";
+import { getDecryptedGitHubTokenForUser } from "./githubRouter.ts";
 
 type WebAgentProvider = "gemini" | "openai" | "anthropic" | "openrouter";
 
@@ -360,6 +369,8 @@ export function createPublicApiRouter(ctx: ServerContext): express.Router {
       prompt?: string;
       history?: Array<{ role: "user" | "assistant"; text: string }>;
       projectName?: string;
+      repoOwner?: string;
+      repoName?: string;
       branch?: string;
     };
 
@@ -382,16 +393,76 @@ export function createPublicApiRouter(ctx: ServerContext): express.Router {
       return;
     }
 
+    const fetchImpl = ctx.fetchFn ?? fetch;
+    const repoOwner = typeof body.repoOwner === "string" ? body.repoOwner.trim() : "";
+    const repoName = typeof body.repoName === "string" ? body.repoName.trim() : "";
+    const branch = typeof body.branch === "string" && body.branch.trim() ? body.branch.trim() : "main";
+    const hasRepo = Boolean(repoOwner && repoName);
+
+    let githubToken: string | null = null;
+    let inspectedFiles: string[] = [];
+    const existingFilesCache = new Map<string, string>();
+    let system: string;
+
+    if (hasRepo) {
+      const auth = await resolveAuthenticatedUser(req, ctx);
+      if (!auth.ok) {
+        res.status(auth.status).json({ error: auth.error });
+        return;
+      }
+      const conn = await getDecryptedGitHubTokenForUser(auth.userId, ctx);
+      if (!conn) {
+        res.status(401).json({
+          code: "GITHUB_NOT_CONNECTED",
+          error: "Connect your GitHub account before running repository tasks.",
+        });
+        return;
+      }
+      githubToken = conn.token;
+
+      try {
+        const tree = await getRepoTree(githubToken, repoOwner, repoName, branch, fetchImpl);
+        const contextPaths = selectContextFiles(tree, prompt, 10);
+        const fileContexts: Array<{ path: string; content: string }> = [];
+
+        for (const p of contextPaths) {
+          try {
+            const f = await getRepoFileContent(githubToken, repoOwner, repoName, p, branch, fetchImpl);
+            fileContexts.push({ path: f.path, content: f.content });
+            existingFilesCache.set(f.path, f.content);
+            inspectedFiles.push(f.path);
+          } catch {
+            // skip unreadable file
+          }
+        }
+
+        system = buildRepoAgentSystemPrompt({
+          owner: repoOwner,
+          repo: repoName,
+          branch,
+          mode,
+          treePaths: tree.filter((t) => t.type === "blob").map((t) => t.path),
+          fileContexts,
+        });
+      } catch (err) {
+        if (err instanceof GitHubApiError) {
+          res.status(err.status).json({ code: err.code, error: err.message });
+          return;
+        }
+        throw err;
+      }
+    } else {
+      const repoContext = body.projectName
+        ? `Active repository: ${body.projectName} (branch: ${branch}).`
+        : "No repository connected yet (standalone web agent session).";
+
+      system =
+        mode === "plan"
+          ? `You are Emdash Web Agent in PLAN mode. ${repoContext} Provide a concise, structured technical plan with clear files, architecture decisions, and actionable steps.`
+          : `You are Emdash Web Agent in BUILD mode. ${repoContext} Deliver concise, production-ready engineering guidance, exact code snippets, and concrete implementation steps.`;
+    }
+
     const modelId = resolveWebAgentModelId(provider, selectedModel);
-    const repoContext = body.projectName
-      ? `Active repository: ${body.projectName} (branch: ${body.branch || "main"}).`
-      : "No repository connected yet (standalone web agent session).";
-
-    const system =
-      mode === "plan"
-        ? `You are Emdash Web Agent in PLAN mode. ${repoContext} Provide a concise, structured technical plan with clear files, architecture decisions, and actionable steps.`
-        : `You are Emdash Web Agent in BUILD mode. ${repoContext} Deliver concise, production-ready engineering guidance, exact code snippets, and concrete implementation steps.`;
-
     const historyBlock = Array.isArray(body.history) && body.history.length > 0
       ? body.history
           .slice(-8)
@@ -410,7 +481,40 @@ export function createPublicApiRouter(ctx: ServerContext): express.Router {
       }
     });
 
-    const fetchImpl = ctx.fetchFn ?? fetch;
+    const maxTokens = hasRepo && mode === "build" ? 8192 : 2048;
+
+    const finalizeResponse = async (rawText: string, tokens: { inputTokens: number; outputTokens: number; totalTokens: number }) => {
+      if (!hasRepo || mode === "plan" || !githubToken) {
+        res.json({ text: rawText, modelId, provider, tokens, inspectedFiles });
+        return;
+      }
+
+      const parsed = parseAgentStructuredResponse(rawText, prompt);
+      const { operations, diffs } = await validateAndBuildDiffs({
+        token: githubToken,
+        owner: repoOwner,
+        repo: repoName,
+        baseBranch: branch,
+        operations: parsed.operations,
+        existingFilesCache,
+        explicitDeleteAllowed: isExplicitDeleteRequested(prompt),
+        fetchFn: fetchImpl,
+      });
+
+      res.json({
+        text: parsed.summary,
+        modelId,
+        provider,
+        tokens,
+        inspectedFiles,
+        operations,
+        diffs,
+        suggestedBranch: parsed.suggestedBranch,
+        suggestedCommitMessage: parsed.commitMessage,
+        suggestedPrTitle: parsed.prTitle,
+        suggestedPrBody: parsed.prBody,
+      });
+    };
 
     try {
       if (provider === "gemini") {
@@ -422,11 +526,11 @@ export function createPublicApiRouter(ctx: ServerContext): express.Router {
           modelId,
           system,
           prompt: composedPrompt,
-          maxOutputTokens: 2048,
+          maxOutputTokens: maxTokens,
           signal: abortController.signal,
           fetchFn: fetchImpl,
         });
-        res.json({ text: out.text, modelId, provider, tokens: out.tokens });
+        await finalizeResponse(out.text, out.tokens);
         return;
       }
 
@@ -440,7 +544,7 @@ export function createPublicApiRouter(ctx: ServerContext): express.Router {
           },
           body: JSON.stringify({
             model: modelId,
-            max_tokens: 2048,
+            max_tokens: maxTokens,
             system,
             messages: [{ role: "user", content: composedPrompt }],
           }),
@@ -475,12 +579,7 @@ export function createPublicApiRouter(ctx: ServerContext): express.Router {
 
         const inputTokens = data.usage?.input_tokens ?? 0;
         const outputTokens = data.usage?.output_tokens ?? 0;
-        res.json({
-          text,
-          modelId,
-          provider,
-          tokens: { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens },
-        });
+        await finalizeResponse(text, { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens });
         return;
       }
 
@@ -492,11 +591,11 @@ export function createPublicApiRouter(ctx: ServerContext): express.Router {
         modelId,
         system,
         prompt: composedPrompt,
-        maxOutputTokens: 2048,
+        maxOutputTokens: maxTokens,
         signal: abortController.signal,
         fetchFn: fetchImpl,
       });
-      res.json({ text: out.text, modelId, provider, tokens: out.tokens });
+      await finalizeResponse(out.text, out.tokens);
     } catch (err) {
       if (err instanceof AdapterHttpError) {
         res.status(err.status >= 400 && err.status < 600 ? err.status : 502).json({

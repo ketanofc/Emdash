@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { handleEdgeGitHubAndAgent, type EdgeGitHubEnv } from "./githubEdge.ts";
 
-interface Env {
+interface Env extends EdgeGitHubEnv {
   ASSETS?: {
     fetch: (request: Request | string, init?: RequestInit) => Promise<Response>;
   };
@@ -151,6 +152,26 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
   // 2. GET /api/health
   if (path === "/api/health" && method === "GET") {
     return jsonResponse({ ok: true, runtime: "cloudflare-pages" }, 200, request);
+  }
+
+  // 2b. GitHub OAuth, Repo Operations & Repo-Aware Web Agent
+  if (path.startsWith("/api/github") || path === "/api/web-agent/chat") {
+    const supabaseAdmin = getSupabaseAdmin(env);
+    const ghResponse = await handleEdgeGitHubAndAgent({
+      request,
+      path,
+      method,
+      env,
+      signingSecret,
+      supabaseAdmin,
+      verifyLocalToken: async (tok) => {
+        const verified = await verifyToken(tok, signingSecret);
+        return verified ? { userId: verified.userId, email: verified.email } : null;
+      },
+      jsonResponse,
+      errorResponse,
+    });
+    if (ghResponse) return ghResponse;
   }
 
   // 3. GET /api/public-config

@@ -8,6 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createAdminRouter, createAuthRouter, type ServerContext } from "./src/server/adminRouter.ts";
 import { createPublicApiRouter } from "./src/server/apiHandlers.ts";
+import { createGitHubRouter } from "./src/server/githubRouter.ts";
 import { LocalAppStore, resolveServerMasterSecret } from "./src/server/store.ts";
 import { ensureAdminEnvironmentAndCredentials } from "./src/server/adminBootstrap.ts";
 
@@ -169,6 +170,7 @@ export function createApp(customCtx?: Partial<ServerContext>) {
 
   expressApp.use("/api/auth", createAuthRouter(ctx));
   expressApp.use("/api/admin", createAdminRouter(ctx));
+  expressApp.use("/api/github", createGitHubRouter(ctx));
   expressApp.use("/api", createPublicApiRouter(ctx));
 
   expressApp.post("/api/publish", (req, res) => {
