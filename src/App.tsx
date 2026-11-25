@@ -41,6 +41,9 @@ import type {
 import type { TemplateItem } from "@/src/data/templates";
 
 const LazyAdminPage = lazy(() => import("@/src/components/admin/AdminPage"));
+const LazyUserDashboardPage = lazy(() =>
+  import("@/src/components/UserDashboardPage").then((m) => ({ default: m.UserDashboardPage }))
+);
 
 const DEFAULT_WALLET: WalletSummary = {
   balance: 100,
@@ -101,6 +104,7 @@ type AppMode =
   | "home"
   | "workspace"
   | "admin"
+  | "dashboard"
   | "signin"
   | "signup"
   | "web"
@@ -112,6 +116,7 @@ function getRouteFromPath(
 ): { mode: AppMode; infoPage?: DocSection } {
   const normalized = pathname.toLowerCase().replace(/\/+$/, "") || "/";
   if (normalized.startsWith("/admin")) return { mode: "admin" };
+  if (normalized.startsWith("/dashboard")) return { mode: "dashboard" };
   if (normalized.startsWith("/web")) return { mode: "web" };
   if (
     normalized.startsWith("/sponsorship") ||
@@ -171,6 +176,7 @@ export default function App() {
   });
 
   const [user, setUser] = useState<UserSession | null>(null);
+  const [authResolved, setAuthResolved] = useState(false);
   const [wallet, setWallet] = useState<WalletSummary>(DEFAULT_WALLET);
 
   const [mode, setMode] = useState<AppMode>(() => {
@@ -210,7 +216,9 @@ export default function App() {
       const auth = await fetchAuthState();
       setUser(auth.user);
     } catch {
-      // keep anonymous session
+      setUser(null);
+    } finally {
+      setAuthResolved(true);
     }
     try {
       const summary = await fetchWalletSummary();
@@ -268,6 +276,8 @@ export default function App() {
       document.title = `${meta.shortTitle} — Emdash`;
     } else if (mode === "sponsorship") {
       document.title = "Sponsorship — Emdash";
+    } else if (mode === "dashboard") {
+      document.title = "Dashboard — Emdash";
     } else if (mode === "web") {
       document.title = "Web Agent — Emdash";
     } else {
@@ -276,25 +286,44 @@ export default function App() {
   }, [infoPage, mode]);
 
   const navigateToMode = useCallback((nextMode: AppMode) => {
+    if (nextMode === "dashboard" && authResolved && !user) {
+      setMode("signin");
+      if (typeof window !== "undefined" && window.location.pathname !== "/signin") {
+        window.history.replaceState({}, "", "/signin");
+      }
+      return;
+    }
     setMode(nextMode);
     if (typeof window !== "undefined" && nextMode !== "info") {
       const targetPath =
         nextMode === "admin"
           ? "/admin"
-          : nextMode === "web"
-            ? "/web"
-            : nextMode === "sponsorship"
-              ? "/sponsorship"
-              : nextMode === "signin"
-                ? "/signin"
-                : nextMode === "signup"
-                  ? "/signup"
-                  : "/";
+          : nextMode === "dashboard"
+            ? "/dashboard"
+            : nextMode === "web"
+              ? "/web"
+              : nextMode === "sponsorship"
+                ? "/sponsorship"
+                : nextMode === "signin"
+                  ? "/signin"
+                  : nextMode === "signup"
+                    ? "/signup"
+                    : "/";
       if (window.location.pathname !== targetPath) {
         window.history.pushState({}, "", targetPath);
       }
     }
-  }, []);
+  }, [authResolved, user]);
+
+  // Anti-URL-bypass guard: never allow unauthenticated access to /dashboard
+  useEffect(() => {
+    if (authResolved && mode === "dashboard" && !user) {
+      setMode("signin");
+      if (typeof window !== "undefined" && window.location.pathname !== "/signin") {
+        window.history.replaceState({}, "", "/signin");
+      }
+    }
+  }, [authResolved, mode, user]);
 
   const openInfoPage = useCallback((page: DocSection = "docs") => {
     if (isGenerating) return;
@@ -694,6 +723,7 @@ export default function App() {
           onGoHome={handleGoHome}
           onOpenTemplates={handleOpenTemplates}
           onOpenWebAgent={() => navigateToMode("web")}
+          onOpenDashboard={user ? () => navigateToMode("dashboard") : undefined}
           onOpenSponsor={handleOpenSponsorship}
           onOpenWallet={() => setWalletOpen(true)}
           onOpenAdmin={user?.role === "admin" ? () => navigateToMode("admin") : undefined}
@@ -713,7 +743,10 @@ export default function App() {
               if (session.role === "admin") {
                 navigateToMode("admin");
               } else {
-                navigateToMode("home");
+                setMode("dashboard");
+                if (typeof window !== "undefined" && window.location.pathname !== "/dashboard") {
+                  window.history.pushState({}, "", "/dashboard");
+                }
               }
             }}
             onOpenDocs={(section) => openInfoPage(section)}
@@ -729,6 +762,57 @@ export default function App() {
             onToggleTheme={handleToggleTheme}
           />
         </>
+      ) : mode === "dashboard" ? (
+        !authResolved ? (
+          <main className="flex-1 grid place-items-center p-8 font-mono text-xs text-muted-foreground">
+            Verifying authenticated session…
+          </main>
+        ) : !user ? (
+          <AuthPage
+            authMode="signin"
+            onChangeMode={(next) => navigateToMode(next)}
+            onSuccess={(session) => {
+              handleSignIn(session);
+              setMode(session.role === "admin" ? "admin" : "dashboard");
+            }}
+            onOpenDocs={(section) => openInfoPage(section)}
+            onOpenWallet={() => setWalletOpen(true)}
+          />
+        ) : (
+          <>
+            <Suspense
+              fallback={
+                <main className="flex-1 grid place-items-center p-8 font-mono text-xs text-muted-foreground">
+                  Loading user dashboard…
+                </main>
+              }
+            >
+              <LazyUserDashboardPage
+                user={user}
+                onUnauthorized={() => {
+                  handleSignOut();
+                  setMode("signin");
+                  if (typeof window !== "undefined") {
+                    window.history.replaceState({}, "", "/signin");
+                  }
+                }}
+                onSignOut={handleSignOut}
+                onOpenWebAgent={() => navigateToMode("web")}
+                onOpenBuilder={() => navigateToMode("home")}
+                onOpenAdmin={user.role === "admin" ? () => navigateToMode("admin") : undefined}
+              />
+            </Suspense>
+            <Footer
+              onGoHome={handleGoHome}
+              onOpenTemplates={handleOpenTemplates}
+              onOpenWebAgent={() => navigateToMode("web")}
+              onOpenDocs={(section = "docs") => openInfoPage(section)}
+              onOpenSponsor={handleOpenSponsorship}
+              isDark={isDark}
+              onToggleTheme={handleToggleTheme}
+            />
+          </>
+        )
       ) : mode === "admin" ? (
         <Suspense
           fallback={

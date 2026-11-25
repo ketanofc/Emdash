@@ -8,12 +8,13 @@ import type { UserSession } from "@/src/types";
 import { cn } from "@/src/lib/utils";
 
 interface NavbarProps {
-  mode: "home" | "workspace" | "admin" | "signin" | "signup" | "web" | "sponsorship" | "info";
+  mode: "home" | "workspace" | "admin" | "dashboard" | "signin" | "signup" | "web" | "sponsorship" | "info";
   isDark: boolean;
   onToggleTheme: (e?: React.MouseEvent<HTMLButtonElement>) => void;
   onGoHome: () => void;
   onOpenTemplates: () => void;
   onOpenWebAgent: () => void;
+  onOpenDashboard?: () => void;
   onOpenSponsor?: () => void;
   onOpenWallet?: () => void;
   onOpenAdmin?: () => void;
@@ -29,6 +30,7 @@ export function Navbar({
   onGoHome,
   onOpenTemplates,
   onOpenWebAgent,
+  onOpenDashboard,
   onOpenSponsor,
   onOpenAdmin,
   onOpenAuth,
@@ -46,7 +48,7 @@ export function Navbar({
   }, [mobileMenuOpen]);
 
   const railWidthClass =
-    mode === "home" || mode === "signin" || mode === "signup" || mode === "sponsorship" || mode === "info"
+    mode === "home" || mode === "dashboard" || mode === "signin" || mode === "signup" || mode === "sponsorship" || mode === "info"
       ? "md:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl"
       : "max-w-full";
 
@@ -115,6 +117,18 @@ export function Navbar({
           >
             Web Agent
           </button>
+          {user && onOpenDashboard && (
+            <button
+              type="button"
+              onClick={onOpenDashboard}
+              className={cn(
+                "text-sm lg:text-[15px] tracking-tight font-sans transition-colors hover:text-primary whitespace-nowrap shrink-0 cursor-pointer",
+                mode === "dashboard" ? "text-primary font-medium" : "text-foreground"
+              )}
+            >
+              Dashboard
+            </button>
+          )}
           {onOpenSponsor && (
             <button
               type="button"
@@ -149,7 +163,7 @@ export function Navbar({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => handleNavAction(() => onOpenAuth())}
+              onClick={() => handleNavAction(() => (onOpenDashboard ? onOpenDashboard() : onOpenAuth()))}
               className="h-8 sm:h-9 px-2 sm:px-3 gap-1.5 sm:gap-2 border-edge bg-background hover:bg-muted font-mono uppercase text-[11px] sm:text-xs shrink-0"
             >
               <span className="size-5 bg-primary text-primary-foreground grid place-items-center text-[11px] font-mono font-bold">

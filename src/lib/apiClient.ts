@@ -610,3 +610,62 @@ export const adminApi = {
       buildApiUrl("admin", `/audit?page=${page}`)
     ),
 };
+
+// ---- User Dashboard API ----
+export interface UserDashboardData {
+  profile: {
+    id: string;
+    email: string;
+    name: string;
+    role: "user" | "admin";
+    status: "active" | "suspended";
+    country?: string | null;
+    createdAt: string;
+    lastSeenAt?: string;
+  };
+  wallet: {
+    balance: number;
+    dailyGrant: number;
+    buildCost: number;
+    repairCost: number;
+    resetTimezone: string;
+    ledger: Array<{
+      id: string;
+      delta: number;
+      balance_after: number;
+      reason: string;
+      created_at: string;
+    }>;
+  };
+  jobs: Array<{
+    id: string;
+    stage: string;
+    status: string;
+    coin_cost: number;
+    refunded: boolean;
+    created_at: string;
+    completed_at: string | null;
+  }>;
+  github: {
+    connected: boolean;
+    username: string | null;
+    avatarUrl: string | null;
+    scope?: string | null;
+    connectedAt?: string | null;
+  };
+  githubSessions: Array<{
+    id: string;
+    repo_owner: string;
+    repo_name: string;
+    base_branch: string;
+    working_branch: string | null;
+    pr_url: string | null;
+    pr_number: number | null;
+    status: string;
+    updated_at: string;
+  }>;
+}
+
+export async function fetchUserDashboard(): Promise<UserDashboardData> {
+  return await apiFetch<UserDashboardData>("/api/dashboard");
+}

@@ -177,5 +177,29 @@ describe("GitHub Backend Security & Authorization", () => {
       }),
     });
     expect(badPr.status).toBe(400);
+
+    // 7. /api/dashboard anti-bypass & user-scoping checks
+    const unauthDash = await fetch(`${baseUrl}/api/dashboard`);
+    expect(unauthDash.status).toBe(401);
+
+    const forgedDash = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Authorization: "Bearer forged.jwt.token" },
+    });
+    expect(forgedDash.status).toBe(401);
+
+    const dashA = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Authorization: `Bearer ${signA.token}` },
+    });
+    const dashAText = await dashA.text();
+    expect(dashA.status).toBe(200);
+    expect(dashAText).toContain("usera@example.com");
+    expect(dashAText).toContain("user-a-gh");
+    expect(dashAText).not.toContain(rawSecretToken);
+
+    store.setUserStatus(signB.user.id, "suspended");
+    const suspendedDash = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Authorization: `Bearer ${signB.token}` },
+    });
+    expect(suspendedDash.status).toBe(403);
   });
 });

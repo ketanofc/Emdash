@@ -154,8 +154,8 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     return jsonResponse({ ok: true, runtime: "cloudflare-pages" }, 200, request);
   }
 
-  // 2b. GitHub OAuth, Repo Operations & Repo-Aware Web Agent
-  if (path.startsWith("/api/github") || path === "/api/web-agent/chat") {
+  // 2b. GitHub OAuth, Repo Operations, User Dashboard & Repo-Aware Web Agent
+  if (path.startsWith("/api/github") || path === "/api/web-agent/chat" || path === "/api/dashboard") {
     const supabaseAdmin = getSupabaseAdmin(env);
     const ghResponse = await handleEdgeGitHubAndAgent({
       request,

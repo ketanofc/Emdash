@@ -130,6 +130,126 @@ export function createPublicApiRouter(ctx: ServerContext): express.Router {
     });
   });
 
+  // Strictly authenticated user dashboard endpoint (zero-trust, user-scoped)
+  router.get("/dashboard", async (req, res) => {
+    const auth = await resolveAuthenticatedUser(req, ctx);
+    if (!auth.ok) {
+      res.status(auth.status).json({ error: auth.error });
+      return;
+    }
+    if (auth.profile.status === "suspended") {
+      res.status(403).json({ error: "Account is suspended." });
+      return;
+    }
+
+    const config = await ctx.store.getConfig();
+    const supabaseAdmin = getSupabaseAdmin();
+
+    if (supabaseAdmin) {
+      try {
+        const [{ data: sbWallet }, { data: sbLedger }, { data: sbJobs }, { data: sbGh }, { data: sbSessions }] =
+          await Promise.all([
+            supabaseAdmin.from("wallets").select("*").eq("user_id", auth.userId).maybeSingle(),
+            supabaseAdmin
+              .from("coin_ledger")
+              .select("id, delta, balance_after, reason, created_at")
+              .eq("user_id", auth.userId)
+              .order("created_at", { ascending: false })
+              .limit(20),
+            supabaseAdmin
+              .from("jobs")
+              .select("id, stage, status, coin_cost, refunded, created_at, completed_at")
+              .eq("user_id", auth.userId)
+              .order("created_at", { ascending: false })
+              .limit(15),
+            supabaseAdmin
+              .from("github_connections")
+              .select("github_user_id, username, avatar_url, scope, connected_at")
+              .eq("user_id", auth.userId)
+              .maybeSingle(),
+            supabaseAdmin
+              .from("github_agent_sessions")
+              .select("id, repo_owner, repo_name, base_branch, working_branch, pr_url, pr_number, status, updated_at")
+              .eq("user_id", auth.userId)
+              .order("updated_at", { ascending: false })
+              .limit(10),
+          ]);
+
+        res.json({
+          profile: {
+            id: auth.profile.user_id,
+            email: auth.profile.email,
+            name: auth.profile.name,
+            role: auth.profile.role,
+            status: auth.profile.status,
+            country: auth.country,
+            createdAt: auth.profile.created_at,
+            lastSeenAt: auth.profile.last_seen_at,
+          },
+          wallet: {
+            balance: Number(sbWallet?.balance ?? config.daily_grant),
+            dailyGrant: config.daily_grant,
+            buildCost: config.costs.build,
+            repairCost: config.costs.repair,
+            resetTimezone: config.reset_timezone,
+            ledger: sbLedger ?? [],
+          },
+          jobs: sbJobs ?? [],
+          github: sbGh
+            ? {
+                connected: true,
+                username: sbGh.username,
+                avatarUrl: sbGh.avatar_url || "",
+                scope: sbGh.scope,
+                connectedAt: sbGh.connected_at,
+              }
+            : { connected: false, username: null, avatarUrl: null },
+          githubSessions: sbSessions ?? [],
+        });
+        return;
+      } catch {
+        // fallback to local store
+      }
+    }
+
+    const wallet = ctx.store.ensureDailyGrant(auth.userId);
+    const ledger = ctx.store.getUserLedger(auth.userId, 20);
+    const jobs = ctx.store.getUserJobs(auth.userId).slice(0, 15);
+    const localGh = ctx.store.getGitHubConnection(auth.userId);
+
+    res.json({
+      profile: {
+        id: auth.profile.user_id,
+        email: auth.profile.email,
+        name: auth.profile.name,
+        role: auth.profile.role,
+        status: auth.profile.status,
+        country: auth.country,
+        createdAt: auth.profile.created_at,
+        lastSeenAt: auth.profile.last_seen_at,
+      },
+      wallet: {
+        balance: wallet.balance,
+        dailyGrant: config.daily_grant,
+        buildCost: config.costs.build,
+        repairCost: config.costs.repair,
+        resetTimezone: config.reset_timezone,
+        ledger,
+      },
+      jobs,
+      github: localGh
+        ? {
+            connected: true,
+            username: localGh.username,
+            avatarUrl: localGh.avatar_url || "",
+            scope: localGh.scope,
+            connectedAt: localGh.connected_at,
+          }
+        : { connected: false, username: null, avatarUrl: null },
+      githubSessions: [],
+    });
+  });
+
   const handlePipelineEndpoint = async (
     req: express.Request,
     res: express.Response,

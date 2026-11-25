@@ -196,6 +196,107 @@ export async function handleEdgeGitHubAndAgent(params: {
   const origin = (env.APP_URL || url.origin).replace(/\/+$/, "");
   const redirectUri = (env.GITHUB_REDIRECT_URI || `${origin}/api/github/callback`).trim();
 
+  // 0. GET /api/dashboard (strictly authenticated, user-scoped)
+  if (path === "/api/dashboard" && method === "GET") {
+    const auth = await resolveEdgeUser(request, env, supabaseAdmin, verifyLocalToken);
+    if (!auth.ok) return errorResponse(auth.error, auth.status, request);
+
+    let balance = 100;
+    let ledger: unknown[] = [];
+    let jobs: unknown[] = [];
+    let github: {
+      connected: boolean;
+      username: string | null;
+      avatarUrl: string | null;
+      scope?: string | null;
+      connectedAt?: string | null;
+    } = { connected: false, username: null, avatarUrl: null };
+    let githubSessions: unknown[] = [];
+    let role: "user" | "admin" = "user";
+    let status: "active" | "suspended" = "active";
+    let createdAt = new Date().toISOString();
+
+    if (supabaseAdmin) {
+      try {
+        const [{ data: prof }, { data: sbWallet }, { data: sbLedger }, { data: sbJobs }, { data: sbGh }, { data: sbSessions }] =
+          await Promise.all([
+            supabaseAdmin.from("profiles").select("role, status, created_at").eq("user_id", auth.userId).maybeSingle(),
+            supabaseAdmin.from("wallets").select("balance").eq("user_id", auth.userId).maybeSingle(),
+            supabaseAdmin
+              .from("coin_ledger")
+              .select("id, delta, balance_after, reason, created_at")
+              .eq("user_id", auth.userId)
+              .order("created_at", { ascending: false })
+              .limit(20),
+            supabaseAdmin
+              .from("jobs")
+              .select("id, stage, status, coin_cost, refunded, created_at, completed_at")
+              .eq("user_id", auth.userId)
+              .order("created_at", { ascending: false })
+              .limit(15),
+            supabaseAdmin
+              .from("github_connections")
+              .select("username, avatar_url, scope, connected_at")
+              .eq("user_id", auth.userId)
+              .maybeSingle(),
+            supabaseAdmin
+              .from("github_agent_sessions")
+              .select("id, repo_owner, repo_name, base_branch, working_branch, pr_url, pr_number, status, updated_at")
+              .eq("user_id", auth.userId)
+              .order("updated_at", { ascending: false })
+              .limit(10),
+          ]);
+
+        if (prof?.status === "suspended") {
+          return errorResponse("Account is suspended.", 403, request);
+        }
+        if (prof?.role === "admin") role = "admin";
+        if (prof?.created_at) createdAt = prof.created_at;
+        if (sbWallet && typeof sbWallet.balance === "number") balance = sbWallet.balance;
+        if (Array.isArray(sbLedger)) ledger = sbLedger;
+        if (Array.isArray(sbJobs)) jobs = sbJobs;
+        if (sbGh) {
+          github = {
+            connected: true,
+            username: sbGh.username,
+            avatarUrl: sbGh.avatar_url || "",
+            scope: sbGh.scope,
+            connectedAt: sbGh.connected_at,
+          };
+        }
+        if (Array.isArray(sbSessions)) githubSessions = sbSessions;
+      } catch {
+        // fallback defaults
+      }
+    }
+
+    return jsonResponse(
+      {
+        profile: {
+          id: auth.userId,
+          email: auth.email,
+          name: auth.email.split("@")[0] || "Builder",
+          role,
+          status,
+          createdAt,
+        },
+        wallet: {
+          balance,
+          dailyGrant: 100,
+          buildCost: 10,
+          repairCost: 0,
+          resetTimezone: "UTC",
+          ledger,
+        },
+        jobs,
+        github,
+        githubSessions,
+      },
+      200,
+      request
+    );
+  }
+
   // 1. GET /api/github/status
   if (path === "/api/github/status" && method === "GET") {
     const auth = await resolveEdgeUser(request, env, supabaseAdmin, verifyLocalToken);
