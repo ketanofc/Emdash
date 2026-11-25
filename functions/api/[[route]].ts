@@ -1,4 +1,8 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { invokeGeminiAdapter, invokeOpenAiAdapter } from "../../src/lib/llm/adapters.ts";
+import { decodeBytea, decryptApiKey, redactSecrets } from "../../src/lib/llm/crypto.ts";
+import { runPipeline } from "../../src/lib/pipeline.ts";
+import type { AttachedFile, BuildPlan, DesignBrief, GeneratedFiles, PipelineStage } from "../../src/types.ts";
 import { handleEdgeGitHubAndAgent, type EdgeGitHubEnv } from "./githubEdge.ts";
 
 interface Env extends EdgeGitHubEnv {
@@ -15,6 +19,9 @@ interface Env extends EdgeGitHubEnv {
   ADMIN_EMAIL?: string;
   ADMIN_PASSWORD?: string;
   GEMINI_API_KEY?: string;
+  OPENAI_API_KEY?: string;
+  OPENROUTER_API_KEY?: string;
+  KEY_ENCRYPTION_SECRET?: string;
   SESSION_SIGNING_SECRET?: string;
   APP_URL?: string;
   [key: string]: unknown;
@@ -586,8 +593,244 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     );
   }
 
-  // 11. Edge streaming for /api/gemini/pipeline & /api/repair
+  // 11. Real Edge Pipeline Execution for /api/gemini/pipeline, /api/repair, /api/generate
   if ((path === "/api/gemini/pipeline" || path === "/api/repair" || path === "/api/generate") && method === "POST") {
+    const isRepairRoute = path === "/api/repair";
+    let body: {
+      prompt?: string;
+      model?: string;
+      brief?: DesignBrief;
+      files?: GeneratedFiles;
+      runtimeErrors?: string[];
+      attachments?: AttachedFile[];
+    } = {};
+    try {
+      body = (await request.json()) as typeof body;
+    } catch {
+      return errorResponse("Invalid JSON payload.", 400, request);
+    }
+
+    const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+    if (!prompt && !isRepairRoute) {
+      return errorResponse("Prompt is required.", 400, request);
+    }
+
+    // Resolve active LLM provider: 1) Supabase providers table, 2) Cloudflare Env Secrets
+    const supabaseAdmin = getSupabaseAdmin(env);
+    let activeProvider: {
+      protocol: "gemini" | "openai";
+      baseUrl: string;
+      slug: string;
+      apiKey: string;
+      modelId: string;
+      supportsJsonSchema: boolean;
+    } | null = null;
+
+    if (supabaseAdmin && env.KEY_ENCRYPTION_SECRET?.trim()) {
+      try {
+        const { data: providers } = await supabaseAdmin
+          .from("providers")
+          .select("*")
+          .eq("enabled", true)
+          .order("priority", { ascending: true })
+          .limit(3);
+
+        for (const p of providers ?? []) {
+          if (!p.api_key_enc) continue;
+          try {
+            const dec = await decryptApiKey(decodeBytea(p.api_key_enc), env.KEY_ENCRYPTION_SECRET.trim());
+            const protocol = p.protocol === "gemini" ? "gemini" : "openai";
+            activeProvider = {
+              protocol,
+              baseUrl:
+                p.base_url ||
+                (protocol === "gemini"
+                  ? "https://generativelanguage.googleapis.com/v1beta"
+                  : "https://openrouter.ai/api/v1"),
+              slug: p.slug || protocol,
+              apiKey: dec.plaintext,
+              modelId:
+                protocol === "gemini"
+                  ? "gemini-2.5-flash"
+                  : "google/gemini-2.5-flash",
+              supportsJsonSchema: Boolean(p.supports_json_schema ?? protocol === "gemini"),
+            };
+            break;
+          } catch {
+            // try next provider
+          }
+        }
+      } catch {
+        // fallback to env secrets
+      }
+    }
+
+    if (!activeProvider && env.GEMINI_API_KEY?.trim()) {
+      const requestedModel = (body.model || "").trim();
+      const modelId = /^gemini-(2\.0|2\.5|1\.5)/i.test(requestedModel)
+        ? requestedModel
+        : /pro|hydrogen|argon/i.test(requestedModel)
+          ? "gemini-2.5-pro"
+          : "gemini-2.5-flash";
+      activeProvider = {
+        protocol: "gemini",
+        baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+        slug: "cloudflare-env-gemini",
+        apiKey: env.GEMINI_API_KEY.trim(),
+        modelId,
+        supportsJsonSchema: true,
+      };
+    } else if (!activeProvider && env.OPENROUTER_API_KEY?.trim()) {
+      activeProvider = {
+        protocol: "openai",
+        baseUrl: "https://openrouter.ai/api/v1",
+        slug: "cloudflare-env-openrouter",
+        apiKey: env.OPENROUTER_API_KEY.trim(),
+        modelId: "google/gemini-2.5-flash",
+        supportsJsonSchema: false,
+      };
+    } else if (!activeProvider && env.OPENAI_API_KEY?.trim()) {
+      activeProvider = {
+        protocol: "openai",
+        baseUrl: "https://api.openai.com/v1",
+        slug: "cloudflare-env-openai",
+        apiKey: env.OPENAI_API_KEY.trim(),
+        modelId: "gpt-4o-mini",
+        supportsJsonSchema: false,
+      };
+    }
+
+    if (!activeProvider) {
+      return jsonResponse(
+        {
+          code: "MISSING_KEY",
+          error:
+            "No LLM API key is configured yet. Add GEMINI_API_KEY in Cloudflare Worker Secrets (or configure a provider in /admin).",
+        },
+        503,
+        request
+      );
+    }
+
+    // Optional Dash Coin deduction for authenticated Supabase users
+    let authedUserId: string | null = null;
+    let walletBalance: number | undefined;
+    const coinCost = isRepairRoute ? 0 : 10;
+    const jobId = crypto.randomUUID();
+
+    if (token && supabaseAdmin) {
+      try {
+        const { data: userData } = await supabaseAdmin.auth.getUser(token);
+        if (userData?.user) {
+          authedUserId = userData.user.id;
+          if (coinCost > 0) {
+            const { data: newBal, error: rpcErr } = await supabaseAdmin.rpc("spend_coins", {
+              p_user_id: authedUserId,
+              p_amount: coinCost,
+              p_reason: isRepairRoute ? "repair_job" : "build_job",
+              p_job_id: jobId,
+            });
+            if (rpcErr) {
+              return jsonResponse(
+                { code: "INSUFFICIENT_COINS", error: "Insufficient Dash Coins for this build." },
+                402,
+                request
+              );
+            }
+            if (typeof newBal === "number") walletBalance = newBal;
+          }
+        }
+      } catch {
+        // continue without wallet deduction if token is local/anonymous
+      }
+    }
+
+    const wantsStream = (request.headers.get("Accept") || "").includes("text/event-stream");
+    const providerCfg = activeProvider;
+
+    const executeGeneration = async (onStage?: (stage: PipelineStage) => void) => {
+      try {
+        const result = await runPipeline(prompt || "Fix runtime errors", {
+          model: providerCfg.modelId,
+          brief: body.brief,
+          files: body.files,
+          runtimeErrors: Array.isArray(body.runtimeErrors) ? body.runtimeErrors : undefined,
+          attachments: Array.isArray(body.attachments) ? body.attachments : undefined,
+          generateFn: async (opts) => {
+            if (providerCfg.protocol === "gemini") {
+              const out = await invokeGeminiAdapter({
+                protocol: "gemini",
+                baseUrl: providerCfg.baseUrl,
+                slug: providerCfg.slug,
+                apiKey: providerCfg.apiKey,
+                modelId: providerCfg.modelId,
+                system: opts.system,
+                prompt: opts.prompt,
+                attachments: opts.attachments,
+                temperature: opts.temperature ?? 0.35,
+                maxOutputTokens: opts.stage === "build" || opts.stage === "repair" ? 16384 : 4096,
+                schema: opts.schema,
+                supportsJsonSchema: providerCfg.supportsJsonSchema,
+              });
+              return out.text;
+            }
+            const out = await invokeOpenAiAdapter({
+              protocol: "openai",
+              baseUrl: providerCfg.baseUrl,
+              slug: providerCfg.slug,
+              apiKey: providerCfg.apiKey,
+              modelId: providerCfg.modelId,
+              system: opts.system,
+              prompt: opts.prompt,
+              attachments: opts.attachments,
+              temperature: opts.temperature ?? 0.35,
+              maxOutputTokens: opts.stage === "build" || opts.stage === "repair" ? 16384 : 4096,
+              schema: opts.schema,
+              supportsJsonSchema: providerCfg.supportsJsonSchema,
+            });
+            return out.text;
+          },
+          },
+          onStage
+        );
+
+        return {
+          ...result,
+          walletBalance,
+        };
+      } catch (err) {
+        if (authedUserId && coinCost > 0 && supabaseAdmin) {
+          try {
+            await supabaseAdmin.rpc("refund_coins", {
+              p_user_id: authedUserId,
+              p_amount: coinCost,
+              p_reason: isRepairRoute ? "repair_refund" : "build_refund",
+              p_job_id: jobId,
+            });
+          } catch {
+            // ignore refund failure
+          }
+        }
+        throw err;
+      }
+    };
+
+    if (!wantsStream) {
+      try {
+        const result = await executeGeneration();
+        return jsonResponse(result, 200, request);
+      } catch (err) {
+        return jsonResponse(
+          {
+            code: "HIGH_DEMAND",
+            error: String(redactSecrets(err instanceof Error ? err.message : "Failed to generate app.")),
+          },
+          503,
+          request
+        );
+      }
+    }
+
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
@@ -596,37 +839,14 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         };
 
         try {
-          sendEvent("stage", { stage: "brief" });
-          await new Promise((r) => setTimeout(r, 100));
-          sendEvent("stage", { stage: "plan" });
-          await new Promise((r) => setTimeout(r, 100));
-          sendEvent("stage", { stage: "build" });
-          await new Promise((r) => setTimeout(r, 100));
-
-          sendEvent("result", {
-            brief: {
-              title: "Modern Web App",
-              description: "Generated by Emdash on Cloudflare Edge",
-              targetAudience: "Developers",
-              stylingChoice: "Tailwind CSS v4 with modern dark theme",
-            },
-            plan: {
-              steps: [
-                { title: "Project Structure", description: "Configuring App components" },
-                { title: "Building UI", description: "Modern responsive layout" },
-              ],
-            },
-            files: {
-              "index.html": "<!DOCTYPE html><html><head><title>Emdash App</title></head><body><div id='root'></div></body></html>",
-              "src/App.tsx": "export default function App() { return <div className='p-8 text-center'><h1>Welcome to Emdash</h1></div>; }",
-            },
-            summary: "Successfully generated application components on Cloudflare Edge.",
-            walletBalance: 45,
+          const result = await executeGeneration((stage) => {
+            sendEvent("stage", { stage });
           });
+          sendEvent("result", result);
         } catch (err) {
           sendEvent("error", {
             code: "HIGH_DEMAND",
-            message: err instanceof Error ? err.message : "Service busy.",
+            message: String(redactSecrets(err instanceof Error ? err.message : "Service busy.")),
           });
         } finally {
           controller.close();
