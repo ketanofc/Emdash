@@ -12,6 +12,10 @@ import {
   selectContextFiles,
   validateAndBuildDiffs,
 } from "../lib/github/agent.ts";
+import {
+  buildStandaloneSystemPrompt,
+  parseStandaloneBuildOutput,
+} from "../lib/github/standaloneBuild.ts";
 import type { AttachedFile, BuildPlan, DesignBrief, GeneratedFiles, PipelineStage } from "../types.ts";
 import { getSupabaseAdmin, resolveAuthenticatedUser, type ServerContext } from "./adminRouter.ts";
 import { getDecryptedGitHubTokenForUser } from "./githubRouter.ts";
@@ -500,17 +504,33 @@ export function createPublicApiRouter(ctx: ServerContext): express.Router {
     };
 
     const rawProvider = typeof body.provider === "string" ? body.provider.trim().toLowerCase() : "gemini";
-    const provider: WebAgentProvider =
+    let provider: WebAgentProvider =
       rawProvider === "openai" || rawProvider === "anthropic" || rawProvider === "openrouter"
         ? rawProvider
         : "gemini";
-    const apiKey = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
+    let apiKey = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
     const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
     const mode = body.mode === "plan" ? "plan" : "build";
     const selectedModel = typeof body.model === "string" ? body.model : "Gemini Flash";
 
     if (!apiKey) {
-      res.status(400).json({ code: "MISSING_KEY", error: "Please enter your API key in Settings to run the agent." });
+      if (process.env.GEMINI_API_KEY?.trim()) {
+        provider = "gemini";
+        apiKey = process.env.GEMINI_API_KEY.trim();
+      } else if (process.env.OPENROUTER_API_KEY?.trim()) {
+        provider = "openrouter";
+        apiKey = process.env.OPENROUTER_API_KEY.trim();
+      } else if (process.env.OPENAI_API_KEY?.trim()) {
+        provider = "openai";
+        apiKey = process.env.OPENAI_API_KEY.trim();
+      }
+    }
+
+    if (!apiKey) {
+      res.status(400).json({
+        code: "MISSING_KEY",
+        error: "No API key configured. Add your own API key in Settings or configure GEMINI_API_KEY on the server.",
+      });
       return;
     }
     if (!prompt) {
@@ -577,14 +597,7 @@ export function createPublicApiRouter(ctx: ServerContext): express.Router {
         throw err;
       }
     } else {
-      const repoContext = body.projectName
-        ? `Active repository: ${body.projectName} (branch: ${branch}).`
-        : "No repository connected yet (standalone web agent session).";
-
-      system =
-        mode === "plan"
-          ? `You are Emdash Web Agent in PLAN mode. ${repoContext} Provide a concise, structured technical plan with clear files, architecture decisions, and actionable steps.`
-          : `You are Emdash Web Agent in BUILD mode. ${repoContext} Deliver concise, production-ready engineering guidance, exact code snippets, and concrete implementation steps.`;
+      system = buildStandaloneSystemPrompt(mode, body.projectName, branch);
     }
 
     const modelId = resolveWebAgentModelId(provider, selectedModel);
@@ -606,10 +619,23 @@ export function createPublicApiRouter(ctx: ServerContext): express.Router {
       }
     });
 
-    const maxTokens = hasRepo && mode === "build" ? 8192 : 2048;
+    const maxTokens = mode === "build" ? 8192 : 2048;
 
     const finalizeResponse = async (rawText: string, tokens: { inputTokens: number; outputTokens: number; totalTokens: number }) => {
       if (!hasRepo || mode === "plan" || !githubToken) {
+        if (!hasRepo && mode === "build") {
+          const standalone = parseStandaloneBuildOutput(rawText);
+          res.json({
+            text: standalone.summary,
+            modelId,
+            provider,
+            tokens,
+            inspectedFiles,
+            standaloneFiles: standalone.files,
+            previewHtml: standalone.previewHtml,
+          });
+          return;
+        }
         res.json({ text: rawText, modelId, provider, tokens, inspectedFiles });
         return;
       }

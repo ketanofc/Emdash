@@ -17,6 +17,10 @@ import {
   selectContextFiles,
   validateAndBuildDiffs,
 } from "../../src/lib/github/agent.ts";
+import {
+  buildStandaloneSystemPrompt,
+  parseStandaloneBuildOutput,
+} from "../../src/lib/github/standaloneBuild.ts";
 import { validateRepoPath } from "../../src/lib/github/pathSafety.ts";
 import type { GitHubFileOperation } from "../../src/lib/github/types.ts";
 import {
@@ -40,6 +44,9 @@ export interface EdgeGitHubEnv {
   SUPABASE_ANON_KEY?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
   SUPABASE_SECRET_KEY?: string;
+  GEMINI_API_KEY?: string;
+  OPENAI_API_KEY?: string;
+  OPENROUTER_API_KEY?: string;
   APP_URL?: string;
 }
 
@@ -607,18 +614,39 @@ export async function handleEdgeGitHubAndAgent(params: {
     }
 
     const rawProvider = (body.provider || "gemini").trim().toLowerCase();
-    const provider =
+    let provider =
       rawProvider === "openai" || rawProvider === "anthropic" || rawProvider === "openrouter"
         ? rawProvider
         : "gemini";
-    const apiKey = (body.apiKey || "").trim();
+    let apiKey = (body.apiKey || "").trim();
     const prompt = (body.prompt || "").trim();
     const mode = body.mode === "plan" ? "plan" : "build";
-    const modelId = resolveWebAgentModelId(provider, body.model || "Gemini Flash");
+    let modelId = resolveWebAgentModelId(provider, body.model || "Gemini Flash");
+
+    // Fallback to server-configured API key if user didn't supply a BYOK key
+    if (!apiKey) {
+      if (env.GEMINI_API_KEY?.trim()) {
+        provider = "gemini";
+        apiKey = env.GEMINI_API_KEY.trim();
+        modelId = resolveWebAgentModelId("gemini", body.model || "Gemini Flash");
+      } else if (env.OPENROUTER_API_KEY?.trim()) {
+        provider = "openrouter";
+        apiKey = env.OPENROUTER_API_KEY.trim();
+        modelId = resolveWebAgentModelId("openrouter", body.model || "Gemini Flash");
+      } else if (env.OPENAI_API_KEY?.trim()) {
+        provider = "openai";
+        apiKey = env.OPENAI_API_KEY.trim();
+        modelId = resolveWebAgentModelId("openai", body.model || "GPT-4o mini");
+      }
+    }
 
     if (!apiKey) {
       return jsonResponse(
-        { code: "MISSING_KEY", error: "Please enter your API key in Settings to run the agent." },
+        {
+          code: "MISSING_KEY",
+          error:
+            "No API key configured. Add your own Gemini, OpenAI, Anthropic, or OpenRouter key in Settings (or configure GEMINI_API_KEY on the server).",
+        },
         400,
         request
       );
@@ -671,13 +699,7 @@ export async function handleEdgeGitHubAndAgent(params: {
         return errorResponse("Failed to read repository context.", 500, request);
       }
     } else {
-      const repoContext = body.projectName
-        ? `Active repository: ${body.projectName} (branch: ${branch}).`
-        : "No repository connected yet (standalone web agent session).";
-      system =
-        mode === "plan"
-          ? `You are Emdash Web Agent in PLAN mode. ${repoContext} Provide a concise, structured technical plan.`
-          : `You are Emdash Web Agent in BUILD mode. ${repoContext} Deliver concise, production-ready engineering guidance.`;
+      system = buildStandaloneSystemPrompt(mode, body.projectName, branch);
     }
 
     const historyBlock = Array.isArray(body.history) && body.history.length > 0
@@ -689,7 +711,7 @@ export async function handleEdgeGitHubAndAgent(params: {
     const composedPrompt = historyBlock
       ? `Previous conversation:\n${historyBlock}\n\nCurrent request:\n${prompt}`
       : prompt;
-    const maxTokens = hasRepo && mode === "build" ? 8192 : 2048;
+    const maxTokens = mode === "build" ? 8192 : 2048;
 
     try {
       let rawText = "";
@@ -775,6 +797,21 @@ export async function handleEdgeGitHubAndAgent(params: {
       }
 
       if (!hasRepo || mode === "plan" || !githubToken) {
+        if (!hasRepo && mode === "build") {
+          const standalone = parseStandaloneBuildOutput(rawText);
+          return jsonResponse(
+            {
+              text: standalone.summary,
+              modelId,
+              provider,
+              inspectedFiles,
+              standaloneFiles: standalone.files,
+              previewHtml: standalone.previewHtml,
+            },
+            200,
+            request
+          );
+        }
         return jsonResponse({ text: rawText, modelId, provider, inspectedFiles }, 200, request);
       }
 

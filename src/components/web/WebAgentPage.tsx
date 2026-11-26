@@ -193,6 +193,10 @@ export function WebAgentPage({
   >({});
   const [prResultByTab, setPrResultByTab] = useState<Record<string, GitHubPullRequestResult>>({});
   const [terminalLogsByTab, setTerminalLogsByTab] = useState<Record<string, string[]>>({});
+  const [previewHtmlByTab, setPreviewHtmlByTab] = useState<Record<string, string>>({});
+  const [standaloneFilesByTab, setStandaloneFilesByTab] = useState<
+    Record<string, Array<{ path: string; content: string }>>
+  >({});
 
   const [promptInput, setPromptInput] = useState<string>("");
   const [attachedNames, setAttachedNames] = useState<string[]>([]);
@@ -262,6 +266,8 @@ export function WebAgentPage({
   const currentPrMeta = prMetaByTab[currentTab.id];
   const currentPrResult = prResultByTab[currentTab.id];
   const currentTerminalLogs = terminalLogsByTab[currentTab.id] ?? [];
+  const currentPreviewHtml = previewHtmlByTab[currentTab.id] ?? null;
+  const currentStandaloneFiles = standaloneFilesByTab[currentTab.id] ?? [];
   const currentFollowUps = followUpsByTab[currentTab.id] ?? [];
   const currentInitialReply = initialReplyByTab[currentTab.id];
   const hasSavedApiKey = savedApiKey.trim().length > 0;
@@ -566,33 +572,6 @@ export function WebAgentPage({
     followUpId?: string;
   }) => {
     const key = savedApiKey.trim();
-    if (!key) {
-      if (params.followUpId) {
-        setFollowUpsByTab((prev) => ({
-          ...prev,
-          [params.tabId]: (prev[params.tabId] ?? []).map((item) =>
-            item.id === params.followUpId
-              ? {
-                  ...item,
-                  status: "missing_key",
-                  reply: "No API key configured. Add your own API key in Settings to run the agent.",
-                  toolSummary: "API Key Required",
-                }
-              : item
-          ),
-        }));
-      } else {
-        setInitialReplyByTab((prev) => ({
-          ...prev,
-          [params.tabId]: {
-            status: "missing_key",
-            text: "No API key configured yet. Add your own Gemini, OpenAI, Anthropic, or OpenRouter API key in Settings to run this prompt.",
-          },
-        }));
-        setAgentState("done");
-      }
-      return;
-    }
 
     const appendLog = (line: string) => {
       setTerminalLogsByTab((prev) => ({
@@ -632,6 +611,7 @@ export function WebAgentPage({
       const payload = (await response.json().catch(() => ({}))) as {
         text?: string;
         modelId?: string;
+        code?: string;
         error?: string;
         inspectedFiles?: string[];
         operations?: GitHubFileOperation[];
@@ -640,10 +620,13 @@ export function WebAgentPage({
         suggestedCommitMessage?: string;
         suggestedPrTitle?: string;
         suggestedPrBody?: string;
+        previewHtml?: string | null;
+        standaloneFiles?: Array<{ path: string; content: string }>;
       };
 
       if (!response.ok || !payload.text) {
         const errMsg = payload.error || `Request failed with status ${response.status}.`;
+        const isMissingKey = payload.code === "MISSING_KEY";
         appendLog(`! Error: ${errMsg}`);
         if (params.followUpId) {
           setFollowUpsByTab((prev) => ({
@@ -652,9 +635,9 @@ export function WebAgentPage({
               item.id === params.followUpId
                 ? {
                     ...item,
-                    status: "error",
+                    status: isMissingKey ? "missing_key" : "error",
                     reply: errMsg,
-                    toolSummary: "Request Failed",
+                    toolSummary: isMissingKey ? "API Key Required" : "Request Failed",
                   }
                 : item
             ),
@@ -663,13 +646,25 @@ export function WebAgentPage({
           setInitialReplyByTab((prev) => ({
             ...prev,
             [params.tabId]: {
-              status: "error",
+              status: isMissingKey ? "missing_key" : "error",
               text: errMsg,
             },
           }));
           setAgentState("done");
         }
         return;
+      }
+
+      if (payload.previewHtml) {
+        setPreviewHtmlByTab((prev) => ({ ...prev, [params.tabId]: payload.previewHtml! }));
+        setInspectorOpen(true);
+        setActiveTab("preview");
+      }
+      if (Array.isArray(payload.standaloneFiles) && payload.standaloneFiles.length > 0) {
+        setStandaloneFilesByTab((prev) => ({
+          ...prev,
+          [params.tabId]: payload.standaloneFiles!,
+        }));
       }
 
       if (Array.isArray(payload.inspectedFiles) && payload.inspectedFiles.length > 0) {
@@ -788,10 +783,8 @@ export function WebAgentPage({
       setInitialReplyByTab((prev) => ({
         ...prev,
         [targetTabId]: {
-          status: savedApiKey.trim() ? "running" : "missing_key",
-          text: savedApiKey.trim()
-            ? `Running ${agentMode} pass with ${modelName}…`
-            : "No API key configured yet. Add your own Gemini, OpenAI, Anthropic, or OpenRouter API key in Settings to run this prompt.",
+          status: "running",
+          text: `Running ${agentMode} pass with ${modelName}…`,
         },
       }));
       setChats((prev) => {
@@ -814,7 +807,7 @@ export function WebAgentPage({
       });
       setPromptInput("");
       setAttachedNames([]);
-      setAgentState(savedApiKey.trim() ? "agent-running" : "done");
+      setAgentState("agent-running");
       void runWebAgentTurn({
         tabId: targetTabId,
         prompt: cleanPrompt,
@@ -847,13 +840,9 @@ export function WebAgentPage({
           id: followUpId,
           prompt: cleanPrompt,
           mode: agentMode,
-          reply: savedApiKey.trim()
-            ? `Running ${agentMode} pass with ${modelName}…`
-            : "No API key configured. Add your own API key in Settings to run the agent.",
-          toolSummary: savedApiKey.trim()
-            ? `${agentMode === "plan" ? "Plan" : "Build"} · Running…`
-            : "API Key Required",
-          status: savedApiKey.trim() ? "running" : "missing_key",
+          reply: `Running ${agentMode} pass with ${modelName}…`,
+          toolSummary: `${agentMode === "plan" ? "Plan" : "Build"} · Running…`,
+          status: "running",
         },
       ],
     }));
@@ -1947,26 +1936,37 @@ export function WebAgentPage({
                                     : "w-full max-w-[375px]"
                               )}
                             >
-                              <div className="h-8 border-b border-edge bg-background px-3 flex items-center justify-between font-mono text-[10px] text-muted-foreground">
+                              <div className="h-8 border-b border-edge bg-background px-3 flex items-center justify-between font-mono text-[10px] text-muted-foreground shrink-0">
                                 <span className="truncate">
                                   {activeProject
                                     ? `preview://${activeProject.name}/${currentTab.branch}`
-                                    : "No active preview"}
+                                    : currentPreviewHtml
+                                      ? `preview://emdash-web-agent/${currentTab.id}`
+                                      : "No active preview"}
                                 </span>
                                 <span className="uppercase shrink-0">
                                   {previewViewport}
                                 </span>
                               </div>
-                              <div className="flex-1 grid place-items-center p-6 text-center">
-                                <div className="max-w-xs space-y-1.5">
-                                  <div className="font-mono uppercase text-[10px] text-muted-foreground">
-                                    No preview output yet
+                              {currentPreviewHtml ? (
+                                <iframe
+                                  title="Web Agent live preview"
+                                  srcDoc={currentPreviewHtml}
+                                  sandbox="allow-scripts allow-forms"
+                                  className="w-full flex-1 min-h-[380px] border-0 bg-white"
+                                />
+                              ) : (
+                                <div className="flex-1 grid place-items-center p-6 text-center">
+                                  <div className="max-w-xs space-y-1.5">
+                                    <div className="font-mono uppercase text-[10px] text-muted-foreground">
+                                      No preview output yet
+                                    </div>
+                                    <p className="text-xs text-muted-foreground leading-relaxed">
+                                      Run a Build prompt to preview the generated website at {previewViewport} width.
+                                    </p>
                                   </div>
-                                  <p className="text-xs text-muted-foreground leading-relaxed">
-                                    Preview viewport framed at {previewViewport} width.
-                                  </p>
                                 </div>
-                              </div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1974,7 +1974,50 @@ export function WebAgentPage({
 
                       {activeTab === "files" && (
                         <div className="flex flex-col h-full min-h-0">
-                          {!activeProject ? (
+                          {!activeProject && currentStandaloneFiles.length > 0 ? (
+                            <>
+                              <div className="max-h-40 overflow-y-auto border-b border-edge bg-card divide-y divide-edge shrink-0">
+                                {currentStandaloneFiles.map((file) => {
+                                  const selected = file.path === (selectedFilePath || currentStandaloneFiles[0]?.path);
+                                  return (
+                                    <button
+                                      key={file.path}
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedFilePath(file.path);
+                                        setSelectedFileContent(file.content);
+                                      }}
+                                      className={cn(
+                                        "w-full text-left px-4 py-1.5 font-mono text-xs flex items-center justify-between transition-colors cursor-pointer",
+                                        selected
+                                          ? "bg-background text-[#c23800] dark:text-[#ff7a3d] font-semibold"
+                                          : "text-foreground hover:bg-muted/50"
+                                      )}
+                                    >
+                                      <span className="inline-flex items-center gap-2 truncate">
+                                        <FileCode2 className="size-3.5 shrink-0" />
+                                        <span className="truncate">{file.path}</span>
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              <div className="flex-1 overflow-auto p-3 font-mono text-xs leading-relaxed bg-background">
+                                {(selectedFileContent || currentStandaloneFiles[0]?.content || "")
+                                  .split("\n")
+                                  .map((line, lineIdx) => (
+                                    <div key={lineIdx} className="flex">
+                                      <span className="w-8 pr-3 text-right select-none text-muted-foreground/60 tabular-nums shrink-0">
+                                        {lineIdx + 1}
+                                      </span>
+                                      <span className="whitespace-pre text-foreground">
+                                        {line || " "}
+                                      </span>
+                                    </div>
+                                  ))}
+                              </div>
+                            </>
+                          ) : !activeProject ? (
                             <div className="flex-1 grid place-items-center p-6 text-center">
                               <div className="max-w-xs space-y-2">
                                 <FileCode2 className="size-5 text-muted-foreground mx-auto" />
